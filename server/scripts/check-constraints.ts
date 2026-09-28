@@ -223,6 +223,24 @@ async function main() {
         [gcashId, userId, sessionId],
       ],
       [
+        'fee paid by GCash, but the fee still counted in the drawer',
+        CHECK,
+        `INSERT INTO ewallet_transactions (idempotency_key, cash_session_id, account_id, type, amount, fee, fee_via, wallet_change, cash_change, customer_number, reference_no, created_by) VALUES (gen_random_uuid(), $3, $1, 'CASH_IN', 50000, 1000, 'GCASH', -49000, 51000, '09171234567', 'T-REF-3', $2)`,
+        [gcashId, userId, sessionId],
+      ],
+      [
+        'load with a "fee paid by GCash" (load has no customer fee)',
+        CHECK,
+        `INSERT INTO ewallet_transactions (idempotency_key, cash_session_id, account_id, type, amount, fee, fee_via, wallet_change, cash_change, customer_number, telco, created_by) VALUES (gen_random_uuid(), $3, $1, 'ELOAD', 10000, 300, 'GCASH', -9700, 10000, '09171234567', 'GLOBE', $2)`,
+        [gcashId, userId, sessionId],
+      ],
+      [
+        'blank customer name',
+        CHECK,
+        `INSERT INTO ewallet_transactions (idempotency_key, cash_session_id, account_id, type, amount, fee, wallet_change, cash_change, customer_number, customer_name, reference_no, created_by) VALUES (gen_random_uuid(), $3, $1, 'CASH_IN', 50000, 1000, -50000, 51000, '09171234567', '   ', 'T-REF-4', $2)`,
+        [gcashId, userId, sessionId],
+      ],
+      [
         'e-wallet cash outside a shift',
         CHECK,
         `INSERT INTO ewallet_transactions (idempotency_key, account_id, type, amount, fee, wallet_change, cash_change, customer_number, reference_no, created_by) VALUES (gen_random_uuid(), $1, 'CASH_IN', 50000, 1000, -50000, 51000, '09171234567', 'T-REF-2', $2)`,

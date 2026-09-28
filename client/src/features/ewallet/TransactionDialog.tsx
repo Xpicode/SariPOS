@@ -1,7 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { api } from '@/api/client';
-import type { EwalletTxn, EwalletTxnType, FeeQuote, Telco, Wallet } from '@/api/types';
+import type { EwalletTxn, EwalletTxnType, FeeQuote, FeeVia, Telco, Wallet } from '@/api/types';
 import { useAuth } from '@/auth/context';
 import { FormField } from '@/components/FormField';
 import { MoneyInput } from '@/components/MoneyInput';
@@ -22,27 +22,14 @@ import { useDebounced } from '@/lib/useDebounced';
 import { newUuid } from '@/lib/uuid';
 import { useAfterEwalletChange, useFeeQuote } from './queries';
 
-const TITLE: Record<EwalletTxnType, string> = {
-  CASH_IN: 'Cash-in',
-  CASH_OUT: 'Cash-out',
-  ELOAD: 'Load',
-  TOP_UP: 'Top up',
-  WITHDRAW: 'Withdraw',
-};
-const SAVE: Record<EwalletTxnType, string> = {
-  CASH_IN: 'Save cash-in',
-  CASH_OUT: 'Save cash-out',
-  ELOAD: 'Save load',
-  TOP_UP: 'Save top-up',
-  WITHDRAW: 'Save withdrawal',
-};
-const HOW: Record<EwalletTxnType, string> = {
-  CASH_IN: 'The customer gives cash; the store sends it to their GCash.',
-  CASH_OUT: 'The customer sends money to the store’s GCash; the store gives cash.',
-  ELOAD: 'The customer pays cash; the store sends load to their number.',
-  TOP_UP: 'Add money to this wallet.',
-  WITHDRAW: 'Take money out of this wallet.',
-};
+type CounterType = 'CASH_IN' | 'CASH_OUT' | 'ELOAD';
+
+// What each type means at the counter, in the Type dropdown.
+const TYPE_OPTIONS: { value: CounterType; label: string }[] = [
+  { value: 'CASH_IN', label: 'Cash-in (customer gives cash, you send GCash)' },
+  { value: 'CASH_OUT', label: 'Cash-out (customer sends GCash, you give cash)' },
+  { value: 'ELOAD', label: 'E-load (customer pays cash, you send load)' },
+];
 const LOAD_AMOUNTS = [10, 15, 20, 30, 50, 100].map((p) => p * 100);
 
 function Line({ label, children }: { label: string; children: ReactNode }) {
@@ -68,12 +55,14 @@ function Summary({
   wallet: Wallet;
   drawer: boolean;
 }) {
+  const byGcash = q.feeVia === 'GCASH';
   const [headline, big] =
     type === 'CASH_IN' || type === 'ELOAD'
       ? ['Collect from the customer', q.cashChange]
       : type === 'CASH_OUT'
         ? ['Give the customer', -q.cashChange]
         : [type === 'TOP_UP' ? `Add to ${wallet.name}` : `Take out of ${wallet.name}`, amount];
+  const feeLabel = byGcash ? `Fee (arrives in ${wallet.name})` : 'Fee (store earns, in cash)';
   return (
     <>
       <p className="text-sm font-semibold text-muted-foreground">{headline}</p>
@@ -81,14 +70,16 @@ function Summary({
       <dl className="mt-3 grid gap-1 text-sm">
         {type === 'CASH_IN' && (
           <>
-            <Line label={`Send from ${wallet.name}`}>{formatPeso(-q.walletChange)}</Line>
-            <Line label="Fee (store earns)">{formatPeso(q.fee)}</Line>
+            <Line label={`Send from ${wallet.name}`}>{formatPeso(amount)}</Line>
+            <Line label={feeLabel}>{formatPeso(q.fee)}</Line>
           </>
         )}
         {type === 'CASH_OUT' && (
           <>
             <Line label={`Must arrive in ${wallet.name}`}>{formatPeso(q.walletChange)}</Line>
-            <Line label="Fee (store keeps)">{formatPeso(q.fee)}</Line>
+            <Line label={byGcash ? 'Fee (included above)' : 'Fee (kept from the cash)'}>
+              {formatPeso(q.fee)}
+            </Line>
           </>
         )}
         {type === 'ELOAD' && (
@@ -111,19 +102,14 @@ function Summary({
           </Line>
         )}
       </dl>
-      {type === 'CASH_OUT' && (
-        <p className="mt-2 text-sm text-muted-foreground">
-          Or hand over {formatPeso(q.walletChange)} and collect the {formatPeso(q.fee)} fee in cash:
-          the drawer ends up the same.
-        </p>
-      )}
     </>
   );
 }
 
-// Cash-in, cash-out and load at the counter; top-up and withdraw for the owner (walletId given).
+// The counter's "New transaction" (cash-in, cash-out, load: picked in the Type dropdown), and the
+// owner's top-up / withdraw (walletId + type given, fixed).
 export function TransactionDialog({
-  type,
+  type: initialType,
   wallets,
   walletId,
   onClose,
@@ -134,30 +120,57 @@ export function TransactionDialog({
   onClose: () => void;
 }) {
   const { user } = useAuth();
+  const isOwner = user?.role === 'OWNER';
   // ONE key per opening of this dialog: a double tap, or Save again after the wifi dropped,
   // sends the SAME key, so the server records the transaction once at most.
   const [idempotencyKey] = useState(newUuid);
-  const choices = wallets.filter((w) =>
-    walletId ? w.id === walletId : type === 'ELOAD' ? w.kind === 'ELOAD' : w.kind !== 'ELOAD',
-  );
+  const [type, setType] = useState<EwalletTxnType>(initialType);
+  const isCounter = !walletId;
+  const choicesFor = (t: EwalletTxnType) =>
+    wallets.filter((w) =>
+      walletId ? w.id === walletId : t === 'ELOAD' ? w.kind === 'ELOAD' : w.kind !== 'ELOAD',
+    );
+  const choices = choicesFor(type);
   const [accountId, setAccountId] = useState(choices[0]?.id);
   const wallet = choices.find((w) => w.id === accountId);
   const [amountText, setAmountText] = useState('');
+  // null = use the fee rules. Only the owner can type another fee (a suki discount).
+  const [feeText, setFeeText] = useState<string | null>(null);
+  const [feeVia, setFeeVia] = useState<FeeVia>('CASH');
   const [number, setNumber] = useState('');
+  const [name, setName] = useState('');
   const [ref, setRef] = useState('');
-  const [telco, setTelco] = useState<Telco | null>(null);
+  const [telco, setTelco] = useState<Telco | ''>('');
   const [drawer, setDrawer] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
   const afterChange = useAfterEwalletChange();
 
+  const hasFee = type === 'CASH_IN' || type === 'CASH_OUT';
   const amount = parsePeso(amountText);
+  const ownFee = hasFee && isOwner && feeText !== null ? parsePeso(feeText) : null;
   const debounced = useDebounced(amount);
+  const debouncedFee = useDebounced(ownFee);
   const quote = useFeeQuote(
-    wallet && debounced ? { accountId: wallet.id, type, amount: debounced, drawer } : null,
+    wallet && debounced
+      ? {
+          accountId: wallet.id,
+          type,
+          amount: debounced,
+          ...((type === 'TOP_UP' || type === 'WITHDRAW') && { drawer }),
+          ...(hasFee && { feeVia }),
+          ...(debouncedFee !== null && { feeOverride: debouncedFee }),
+        }
+      : null,
   );
-  // Only a quote for the amount on screen NOW counts (not one for what was typed a moment ago).
-  const q = debounced === amount ? quote.data : undefined;
+  // Only a quote for what is on screen NOW counts (not one for what was typed a moment ago).
+  const q = debounced === amount && debouncedFee === ownFee ? quote.data : undefined;
   const short = q && wallet && wallet.balance + q.walletChange < 0;
+
+  function changeType(t: CounterType) {
+    setType(t);
+    setAccountId(choicesFor(t)[0]?.id);
+    setFeeText(null); // another type has other fee rules
+  }
 
   const cleanNumber = number.replace(/[\s-]/g, '');
   const cleanRef = ref.replace(/\s+/g, '');
@@ -165,6 +178,7 @@ export function TransactionDialog({
   const needsRef = type === 'CASH_IN' || type === 'CASH_OUT';
   const errors = {
     amount: !amount ? 'Enter the amount, like 500' : undefined,
+    fee: feeText !== null && ownFee === null ? 'Enter the fee, like 10' : undefined,
     number:
       needsNumber && !cleanNumber
         ? 'Enter the mobile number'
@@ -188,8 +202,11 @@ export function TransactionDialog({
           type,
           accountId,
           amount,
-          expectedFee: q!.fee, // "the customer was told this fee": refused if it changed
+          // "The customer was told this fee": refused if the fee rules changed meanwhile.
+          ...(ownFee === null ? { expectedFee: q!.fee } : { feeOverride: ownFee }),
+          ...(hasFee && { feeVia }),
           ...(cleanNumber && { customerNumber: cleanNumber }),
+          ...(name.trim() && type !== 'TOP_UP' && type !== 'WITHDRAW' && { customerName: name }),
           ...(cleanRef && { referenceNo: cleanRef }),
           ...(type === 'ELOAD' && { telco }),
           ...((type === 'TOP_UP' || type === 'WITHDRAW') && { drawer }),
@@ -208,206 +225,304 @@ export function TransactionDialog({
     if (!Object.values(errors).some(Boolean) && q && !short && !save.isPending) save.mutate();
   }
 
-  const amountField = (
-    <FormField id="ew-amount" label="Amount" error={err('amount')}>
-      <MoneyInput
-        id="ew-amount"
-        autoFocus={type !== 'ELOAD'}
-        value={amountText}
-        onChange={(e) => setAmountText(e.target.value)}
-        className="h-14 text-2xl"
-        {...fieldAria('ew-amount', err('amount'))}
-      />
-    </FormField>
-  );
-  const numberField = (
-    <FormField
-      id="ew-number"
-      label={
-        needsNumber
-          ? type === 'ELOAD'
-            ? 'Number to load'
-            : 'Their GCash number'
-          : 'Sender’s number (optional)'
-      }
-      error={err('number')}
-    >
-      <Input
-        id="ew-number"
-        autoFocus={type === 'ELOAD'}
-        inputMode="tel"
-        autoComplete="off"
-        value={number}
-        onChange={(e) => setNumber(e.target.value)}
-        placeholder="0917 123 4567"
-        className="h-12 font-mono text-lg tracking-wide"
-        {...fieldAria('ew-number', err('number'))}
-      />
-    </FormField>
-  );
-  const refField = (
-    <FormField
-      id="ew-ref"
-      label={needsRef ? 'Reference no.' : 'Reference no. (optional)'}
-      error={err('ref')}
-      hint={
-        type === 'CASH_IN'
-          ? 'Send it in the GCash app first, then type the reference number.'
-          : type === 'CASH_OUT'
-            ? 'Check that the money arrived in the store’s GCash first.'
-            : undefined
-      }
-    >
-      <Input
-        id="ew-ref"
-        autoComplete="off"
-        spellCheck={false}
-        value={ref}
-        onChange={(e) => setRef(e.target.value)}
-        placeholder="1009 876 543 210"
-        className="h-12 font-mono text-lg tracking-wide"
-        {...fieldAria('ew-ref', err('ref'), type === 'CASH_IN' || type === 'CASH_OUT')}
-      />
-    </FormField>
-  );
+  // The Service fee box: the fee rules' fee (or the load commission), read-only for the cashier.
+  // The owner can type over it; the fee rules' amount stays visible underneath.
+  const feeValue = feeText ?? (q ? centavosToInput(q.standardFee ?? q.fee) : '');
+  const feeHint =
+    type === 'ELOAD' ? (
+      'Set in the load wallet’s settings'
+    ) : !isOwner ? (
+      'From the fee rules. Only the owner can change it.'
+    ) : feeText !== null && q?.standardFee != null && ownFee !== q.standardFee ? (
+      <>
+        Fee rules say {formatPeso(q.standardFee)}.{' '}
+        <button
+          type="button"
+          onClick={() => setFeeText(null)}
+          className="font-semibold text-primary underline-offset-2 hover:underline"
+        >
+          Use that
+        </button>
+      </>
+    ) : (
+      'From the fee rules. You can change it.'
+    );
+
+  const title = isCounter
+    ? 'New transaction'
+    : type === 'TOP_UP'
+      ? `Top up ${wallet?.name ?? ''}`
+      : `Withdraw from ${wallet?.name ?? ''}`;
 
   return (
     <Dialog open onOpenChange={(open) => !open && !save.isPending && onClose()}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{TITLE[type]}</DialogTitle>
-          <DialogDescription>{HOW[type]}</DialogDescription>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>
+            {isCounter
+              ? 'Pick the type, then fill in what the customer and the receipt say.'
+              : type === 'TOP_UP'
+                ? 'Add money to this wallet.'
+                : 'Take money out of this wallet.'}
+          </DialogDescription>
         </DialogHeader>
-        {!wallet ? (
-          <p role="alert">No wallet for this yet.</p>
-        ) : (
-          <form onSubmit={onSubmit} noValidate className="grid gap-5">
-            {choices.length > 1 ? (
-              <FormField id="ew-wallet" label="Wallet">
-                <NativeSelect
-                  id="ew-wallet"
-                  value={accountId}
-                  onChange={(e) => setAccountId(Number(e.target.value))}
-                >
-                  {choices.map((w) => (
-                    <option key={w.id} value={w.id}>
-                      {w.name} · {formatPeso(w.balance)}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </FormField>
-            ) : (
-              <p className="-mt-2 text-sm text-muted-foreground">
-                {wallet.name} has {formatPeso(wallet.balance)}
-              </p>
-            )}
+        <form onSubmit={onSubmit} noValidate className="grid gap-5">
+          {isCounter && (
+            <FormField id="ew-type" label="Type">
+              <NativeSelect
+                id="ew-type"
+                value={type}
+                onChange={(e) => changeType(e.target.value as CounterType)}
+              >
+                {TYPE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </NativeSelect>
+            </FormField>
+          )}
 
-            {type === 'ELOAD' && (
+          {!wallet ? (
+            <p role="alert">No wallet for this yet. The owner can add one.</p>
+          ) : choices.length > 1 ? (
+            <FormField id="ew-wallet" label="Wallet">
+              <NativeSelect
+                id="ew-wallet"
+                value={accountId}
+                onChange={(e) => setAccountId(Number(e.target.value))}
+              >
+                {choices.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name} · {formatPeso(w.balance)}
+                  </option>
+                ))}
+              </NativeSelect>
+            </FormField>
+          ) : (
+            <p className="-mt-2 text-sm text-muted-foreground">
+              {wallet.name} has {formatPeso(wallet.balance)}
+            </p>
+          )}
+
+          {type === 'ELOAD' && (
+            <FormField id="ew-telco" label="Network" error={err('telco')}>
+              <NativeSelect
+                id="ew-telco"
+                value={telco}
+                onChange={(e) => setTelco(e.target.value as Telco)}
+                {...fieldAria('ew-telco', err('telco'))}
+              >
+                <option value="" disabled>
+                  Select the network
+                </option>
+                {TELCOS.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </NativeSelect>
+            </FormField>
+          )}
+
+          <div
+            className={
+              type === 'TOP_UP' || type === 'WITHDRAW' ? 'grid' : 'grid gap-4 sm:grid-cols-2'
+            }
+          >
+            <FormField id="ew-amount" label="Amount" error={err('amount')}>
+              <MoneyInput
+                id="ew-amount"
+                autoFocus
+                value={amountText}
+                onChange={(e) => {
+                  setAmountText(e.target.value);
+                  setFeeText(null); // a new amount can fall in another fee bracket
+                }}
+                className="h-12 text-lg"
+                {...fieldAria('ew-amount', err('amount'))}
+              />
+            </FormField>
+            {type !== 'TOP_UP' && type !== 'WITHDRAW' && (
+              <FormField
+                id="ew-fee"
+                label={type === 'ELOAD' ? 'Commission' : 'Service fee'}
+                error={err('fee')}
+                hint={feeHint}
+              >
+                <MoneyInput
+                  id="ew-fee"
+                  value={feeValue}
+                  readOnly={!(isOwner && hasFee)}
+                  placeholder={amount ? '…' : '0.00'}
+                  onChange={(e) => setFeeText(e.target.value)}
+                  className="h-12 text-lg read-only:bg-muted read-only:text-muted-foreground"
+                  {...fieldAria('ew-fee', err('fee'), true)}
+                />
+              </FormField>
+            )}
+          </div>
+
+          {type === 'ELOAD' && (
+            <div className="grid grid-cols-6 gap-2" role="group" aria-label="Load amounts">
+              {LOAD_AMOUNTS.map((a) => (
+                <Button
+                  key={a}
+                  type="button"
+                  variant="outline"
+                  className="px-1 font-mono tabular-nums"
+                  onClick={() => setAmountText(centavosToInput(a))}
+                >
+                  {formatPesoShort(a)}
+                </Button>
+              ))}
+            </div>
+          )}
+
+          {hasFee && (
+            <FormField
+              id="ew-fee-via"
+              label="Fee paid via"
+              hint="How the customer paid your service fee, separate from the cash-in/cash-out amount itself."
+            >
+              <NativeSelect
+                id="ew-fee-via"
+                value={feeVia}
+                onChange={(e) => setFeeVia(e.target.value as FeeVia)}
+                aria-describedby="ew-fee-via-msg"
+              >
+                <option value="CASH">Cash (into the drawer)</option>
+                <option value="GCASH">GCash (sent to the store’s wallet)</option>
+              </NativeSelect>
+            </FormField>
+          )}
+
+          {type !== 'TOP_UP' && type !== 'WITHDRAW' && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField
+                id="ew-number"
+                label={
+                  type === 'ELOAD'
+                    ? 'Number to load'
+                    : type === 'CASH_IN'
+                      ? 'Their GCash number'
+                      : 'Sender’s number (optional)'
+                }
+                error={err('number')}
+              >
+                <Input
+                  id="ew-number"
+                  inputMode="tel"
+                  autoComplete="off"
+                  value={number}
+                  onChange={(e) => setNumber(e.target.value)}
+                  placeholder="0917 123 4567"
+                  className="h-12 font-mono tracking-wide"
+                  {...fieldAria('ew-number', err('number'))}
+                />
+              </FormField>
+              <FormField id="ew-name" label="Customer name (optional)">
+                <Input
+                  id="ew-name"
+                  autoComplete="off"
+                  maxLength={100}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. Walk-in customer"
+                  className="h-12"
+                />
+              </FormField>
+            </div>
+          )}
+
+          <FormField
+            id="ew-ref"
+            label={needsRef ? 'Reference number' : 'Reference number (optional)'}
+            error={err('ref')}
+            hint={
+              type === 'CASH_IN'
+                ? 'Send it in the GCash app first, then type the reference number.'
+                : type === 'CASH_OUT'
+                  ? 'Check that the money arrived in the store’s GCash first.'
+                  : undefined
+            }
+          >
+            <Input
+              id="ew-ref"
+              autoComplete="off"
+              spellCheck={false}
+              value={ref}
+              onChange={(e) => setRef(e.target.value)}
+              placeholder="e.g. 1234567890123"
+              className="h-12 font-mono tracking-wide"
+              {...fieldAria('ew-ref', err('ref'), needsRef)}
+            />
+          </FormField>
+
+          {(type === 'TOP_UP' || type === 'WITHDRAW') && (
+            <label className="flex items-start gap-3 text-[15px]">
+              <input
+                type="checkbox"
+                checked={drawer}
+                onChange={(e) => setDrawer(e.target.checked)}
+                className="mt-1 size-4.5 accent-primary"
+              />
+              <span>
+                {type === 'TOP_UP'
+                  ? 'Paid with cash from the drawer'
+                  : 'The cash goes into the drawer'}
+                <span className="block text-sm text-muted-foreground">
+                  Leave unticked for a bank transfer or the owner’s own money.
+                </span>
+              </span>
+            </label>
+          )}
+
+          <section
+            aria-label="Summary"
+            aria-live="polite"
+            className="rounded-2xl bg-muted/70 px-5 py-4"
+          >
+            {quote.isError && debounced === amount ? (
+              <p className="text-[15px] font-medium text-destructive">{quote.error.message}</p>
+            ) : !q || !wallet ? (
+              <p className="text-[15px] text-muted-foreground">
+                {amount ? 'Checking the fee…' : 'Type the amount to see the fee.'}
+              </p>
+            ) : (
               <>
-                <fieldset className="grid gap-2">
-                  <legend className="mb-2 text-sm font-medium">Network</legend>
-                  <div className="grid grid-cols-5 gap-2">
-                    {TELCOS.map((t) => (
-                      <label
-                        key={t.value}
-                        className="flex h-11 cursor-pointer items-center justify-center rounded-full border text-sm font-semibold transition-colors has-checked:border-primary has-checked:bg-accent has-checked:text-accent-foreground has-focus-visible:ring-[3px] has-focus-visible:ring-ring/50"
-                      >
-                        <input
-                          type="radio"
-                          name="telco"
-                          className="sr-only"
-                          checked={telco === t.value}
-                          onChange={() => setTelco(t.value)}
-                        />
-                        {t.label}
-                      </label>
-                    ))}
-                  </div>
-                  {err('telco') && <p className="text-sm text-destructive">{err('telco')}</p>}
-                </fieldset>
-                {numberField}
+                <Summary type={type} amount={amount!} q={q} wallet={wallet} drawer={drawer} />
+                {short && (
+                  <p className="mt-2 text-[15px] font-medium text-destructive">
+                    {wallet.name} only has {formatPeso(wallet.balance)}.{' '}
+                    {isOwner ? 'Top it up first.' : 'Ask the owner to top it up.'}
+                  </p>
+                )}
               </>
             )}
+          </section>
 
-            {amountField}
-            {type === 'ELOAD' && (
-              <div className="grid grid-cols-6 gap-2" role="group" aria-label="Load amounts">
-                {LOAD_AMOUNTS.map((a) => (
-                  <Button
-                    key={a}
-                    type="button"
-                    variant="outline"
-                    className="px-1 font-mono tabular-nums"
-                    onClick={() => setAmountText(centavosToInput(a))}
-                  >
-                    {formatPesoShort(a)}
-                  </Button>
-                ))}
-              </div>
-            )}
-            {(type === 'TOP_UP' || type === 'WITHDRAW') && (
-              <label className="flex items-start gap-3 text-[15px]">
-                <input
-                  type="checkbox"
-                  checked={drawer}
-                  onChange={(e) => setDrawer(e.target.checked)}
-                  className="mt-1 size-4.5 accent-primary"
-                />
-                <span>
-                  {type === 'TOP_UP'
-                    ? 'Paid with cash from the drawer'
-                    : 'The cash goes into the drawer'}
-                  <span className="block text-sm text-muted-foreground">
-                    Leave unticked for a bank transfer or the owner’s own money.
-                  </span>
-                </span>
-              </label>
-            )}
-
-            <section
-              aria-label="Summary"
-              aria-live="polite"
-              className="rounded-2xl bg-muted/70 px-5 py-4"
-            >
-              {quote.isError && debounced === amount ? (
-                <p className="text-[15px] font-medium text-destructive">{quote.error.message}</p>
-              ) : !q || !wallet ? (
-                <p className="text-[15px] text-muted-foreground">
-                  {amount ? 'Checking the fee…' : 'Type the amount to see the fee.'}
-                </p>
-              ) : (
-                <>
-                  <Summary type={type} amount={amount!} q={q} wallet={wallet} drawer={drawer} />
-                  {short && (
-                    <p className="mt-2 text-[15px] font-medium text-destructive">
-                      {wallet.name} only has {formatPeso(wallet.balance)}.{' '}
-                      {user?.role === 'OWNER' ? 'Top it up first.' : 'Ask the owner to top it up.'}
-                    </p>
-                  )}
-                </>
-              )}
-            </section>
-
-            {type === 'CASH_IN' && numberField}
-            {type !== 'ELOAD' && type !== 'TOP_UP' && type !== 'WITHDRAW' && refField}
-            {type === 'CASH_OUT' && numberField}
-            {(type === 'ELOAD' || type === 'TOP_UP' || type === 'WITHDRAW') && refField}
-
-            {save.isError && (
-              <p role="alert" className="text-[15px] font-medium text-destructive">
-                {save.error.message}
-              </p>
-            )}
-            <Button
-              type="submit"
-              size="lg"
-              className="h-14 text-lg"
-              disabled={save.isPending || Boolean(short)}
-            >
-              {save.isPending ? 'Saving…' : SAVE[type]}
-            </Button>
-          </form>
-        )}
+          {save.isError && (
+            <p role="alert" className="text-[15px] font-medium text-destructive">
+              {save.error.message}
+            </p>
+          )}
+          <Button
+            type="submit"
+            size="lg"
+            className="h-14 text-lg"
+            disabled={save.isPending || Boolean(short) || !wallet}
+          >
+            {save.isPending
+              ? 'Saving…'
+              : isCounter
+                ? 'Log transaction'
+                : type === 'TOP_UP'
+                  ? 'Save top-up'
+                  : 'Save withdrawal'}
+          </Button>
+        </form>
       </DialogContent>
     </Dialog>
   );

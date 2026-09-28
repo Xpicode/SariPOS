@@ -1,6 +1,6 @@
 import type { Db } from '../../db/pool';
 import { inStoreDays } from '../../utils/dateRange';
-import type { FeeRule, TxnType } from './fee';
+import type { FeeRule, FeeVia, TxnType } from './fee';
 
 export type WalletKind = 'GCASH' | 'MAYA' | 'ELOAD';
 
@@ -123,6 +123,8 @@ export async function insertTransaction(
     walletChange: number;
     cashChange: number;
     customerNumber: string | null;
+    customerName: string | null;
+    feeVia: FeeVia;
     referenceNo: string | null;
     telco: string | null;
     createdBy: number;
@@ -131,8 +133,8 @@ export async function insertTransaction(
   const { rows } = await db.query<{ id: number }>(
     `INSERT INTO ewallet_transactions
        (idempotency_key, cash_session_id, account_id, type, amount, fee, wallet_change,
-        cash_change, customer_number, reference_no, telco, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
+        cash_change, customer_number, reference_no, telco, created_by, customer_name, fee_via)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
     [
       t.idempotencyKey,
       t.sessionId,
@@ -146,6 +148,8 @@ export async function insertTransaction(
       t.referenceNo,
       t.telco,
       t.createdBy,
+      t.customerName,
+      t.feeVia,
     ],
   );
   return rows[0].id;
@@ -161,6 +165,8 @@ export type TxnView = {
   walletChange: number;
   cashChange: number;
   customerNumber: string | null;
+  customerName: string | null;
+  feeVia: FeeVia;
   referenceNo: string | null;
   telco: string | null;
   cashSessionId: number | null;
@@ -171,7 +177,8 @@ export type TxnView = {
 const TXN_SELECT = `
   SELECT t.id, t.type, t.account_id AS "accountId", a.name AS "accountName", t.amount, t.fee,
          t.wallet_change AS "walletChange", t.cash_change AS "cashChange",
-         t.customer_number AS "customerNumber", t.reference_no AS "referenceNo", t.telco,
+         t.customer_number AS "customerNumber", t.customer_name AS "customerName",
+         t.fee_via AS "feeVia", t.reference_no AS "referenceNo", t.telco,
          t.cash_session_id AS "cashSessionId", u.full_name AS "createdBy", t.created_at AS "createdAt"
   FROM ewallet_transactions t
   JOIN ewallet_accounts a ON a.id = t.account_id

@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
-import type { EwalletTxn, EwalletTxnType, FeeQuote, FeeRule, Wallet } from '@/api/types';
+import type { EwalletTxn, EwalletTxnType, FeeQuote, FeeRule, FeeVia, Wallet } from '@/api/types';
 
 export function useWallets() {
   return useQuery({
@@ -32,6 +32,8 @@ export type QuoteRequest = {
   type: EwalletTxnType;
   amount: number;
   drawer?: boolean;
+  feeVia?: FeeVia;
+  feeOverride?: number; // owner only (the server refuses it from a cashier when saving)
 };
 
 // The fee and what happens to both pockets, computed by the SERVER (the same code that saves the

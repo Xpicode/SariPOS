@@ -1,6 +1,7 @@
 // Integration tests for the money paths (plan Phase 9): the real API + a real PostgreSQL test DB.
 // Tests in this file run in order and build on each other, like one shift at the counter.
 import { customerId, passwords, resetDb, startApi, stockOf, unitId } from './helpers'; // first
+import { pool } from '../db/pool';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, before, describe, test } from 'node:test';
@@ -256,5 +257,78 @@ describe('GCash cash-out', () => {
     const r = await cashOut(10_000, 'REF-OUT-1');
     assert.equal(r.status, 409);
     assert.equal(r.body.error.code, 'DUPLICATE_REFERENCE');
+  });
+});
+
+describe('GCash form: fee paid by GCash, owner-only fee, customer name', () => {
+  const gcash = 1;
+  const cashIn = (token: string, extra: object) =>
+    api.call('POST', '/ewallet/transactions', {
+      token,
+      body: {
+        idempotencyKey: randomUUID(),
+        type: 'CASH_IN',
+        accountId: gcash,
+        amount: 50_000, // ₱500, fee ₱10 by the seed's rules
+        customerNumber: '0917 123 4567',
+        referenceNo: `REF-${randomUUID().slice(0, 8)}`,
+        ...extra,
+      },
+    });
+  const drawer = async () =>
+    (await api.call('GET', '/cash-sessions/current', { token: owner })).body.data.session
+      .expectedCash as number;
+
+  test('fee by GCash: the drawer gets only the ₱500, the ₱10 fee lands in the wallet', async () => {
+    const before = await drawer();
+    const r = await cashIn(cashier, { feeVia: 'GCASH', customerName: '  Aling Nena ' });
+    assert.equal(r.status, 201, JSON.stringify(r.body));
+    const t = r.body.data.transaction;
+    assert.deepEqual(
+      [t.fee, t.feeVia, t.walletChange, t.cashChange],
+      [1_000, 'GCASH', -49_000, 50_000],
+    );
+    assert.equal(t.customerName, 'Aling Nena');
+    assert.equal(await drawer(), before + 50_000);
+  });
+
+  test('a cashier cannot change the fee (403), even to zero', async () => {
+    const r = await cashIn(cashier, { feeOverride: 0 });
+    assert.equal(r.status, 403);
+    assert.equal(r.body.error.code, 'FEE_OWNER_ONLY');
+  });
+
+  test('the owner can: ₱5 for a suki, and the audit log shows ₱10 → ₱5', async () => {
+    const r = await cashIn(owner, { feeOverride: 500 });
+    assert.equal(r.status, 201, JSON.stringify(r.body));
+    assert.equal(r.body.data.transaction.fee, 500);
+    const { rows } = await pool.query(
+      `SELECT before_data, after_data FROM audit_logs
+       WHERE action = 'EWALLET_FEE_CHANGED' AND entity_id = $1`,
+      [r.body.data.transaction.id],
+    );
+    assert.equal(rows[0].before_data.standardFee, 1_000);
+    assert.equal(rows[0].after_data.fee, 500);
+  });
+
+  test('the owner typing the SAME fee as the rules is not an audit entry', async () => {
+    const r = await cashIn(owner, { feeOverride: 1_000 });
+    assert.equal(r.status, 201);
+    const { rowCount } = await pool.query(
+      "SELECT 1 FROM audit_logs WHERE action = 'EWALLET_FEE_CHANGED' AND entity_id = $1",
+      [r.body.data.transaction.id],
+    );
+    assert.equal(rowCount, 0);
+  });
+
+  test('preview: the fee rules say ₱10, the owner ₱5 changes the summary', async () => {
+    const r = await api.call('POST', '/ewallet/fee-preview', {
+      token: owner,
+      body: { accountId: gcash, type: 'CASH_IN', amount: 50_000, feeOverride: 500 },
+    });
+    assert.deepEqual(
+      [r.body.data.standardFee, r.body.data.fee, r.body.data.cashChange],
+      [1_000, 500, 50_500],
+    );
   });
 });

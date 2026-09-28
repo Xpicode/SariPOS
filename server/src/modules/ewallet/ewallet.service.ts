@@ -16,7 +16,7 @@ import type {
   UpdateAccountInput,
 } from './ewallet.schema';
 import * as repo from './ewallet.repository';
-import { quote, type TxnType } from './fee';
+import { computeFee, quote, type FeeVia, type TxnType } from './fee';
 
 type Actor = { id: number; role: Role };
 
@@ -30,9 +30,17 @@ const forRole = (t: repo.TxnView, role: Role) =>
 
 // The fee and both pocket changes for this wallet. Used by the preview AND the real transaction,
 // so what the cashier is shown is exactly what gets saved.
+// standardFee = what the fee rules say, so an owner who typed another fee sees both.
 async function quoteFor(
   db: Db,
-  input: { accountId: number; type: TxnType; amount: number; drawer?: boolean },
+  input: {
+    accountId: number;
+    type: TxnType;
+    amount: number;
+    drawer?: boolean;
+    feeVia?: FeeVia;
+    feeOverride?: number;
+  },
 ) {
   const wallet = await repo.getWallet(db, input.accountId);
   if (!wallet) throw walletNotFound();
@@ -48,11 +56,24 @@ async function quoteFor(
     input.type === 'CASH_IN' || input.type === 'CASH_OUT'
       ? await repo.feeRules(db, wallet.kind, input.type)
       : [];
-  return quote(input.type, input.amount, {
+  const q = quote(input.type, input.amount, {
     rules,
     commissionBp: wallet.commissionBp,
     drawer: input.drawer,
+    feeVia: input.feeVia,
+    fee: input.feeOverride,
   });
+  let standardFee: number | null = q.fee;
+  if (input.feeOverride !== undefined && rules.length > 0) {
+    try {
+      standardFee = computeFee(input.amount, rules);
+    } catch {
+      standardFee = null; // no rule covers this amount: only the owner's fee exists
+    }
+  } else if (input.feeOverride !== undefined) {
+    standardFee = null;
+  }
+  return { ...q, standardFee };
 }
 
 export const listWallets = () => repo.listWallets(pool);
@@ -80,15 +101,26 @@ export async function createTransaction(input: TransactionInput, actor: Actor, i
     throw new AppError(403, 'FORBIDDEN', 'Only the owner can top up or withdraw');
   }
   const drawer = 'drawer' in input && input.drawer;
+  const feeVia = 'feeVia' in input ? input.feeVia : 'CASH';
+  const feeOverride = 'feeOverride' in input ? input.feeOverride : undefined;
+  // The fee is store income: only the owner may charge something other than the fee rules.
+  if (feeOverride !== undefined && actor.role !== 'OWNER') {
+    throw new AppError(403, 'FEE_OWNER_ONLY', 'Only the owner can change the fee');
+  }
   try {
     return await withTransaction(async (db) => {
       // 1. Same key again (double tap, retry after the wifi dropped) = the same transaction.
       const existing = await repo.findByKey(db, input.idempotencyKey);
       if (existing) return replay(db, existing, actor);
 
-      // 2. Fee and pocket changes, computed here. The client only said type, wallet and amount.
-      const q = await quoteFor(db, { ...input, drawer });
-      if (input.expectedFee !== undefined && input.expectedFee !== q.fee) {
+      // 2. Fee and pocket changes, computed here. The client only said type, wallet and amount
+      //    (and, for the owner, the fee).
+      const q = await quoteFor(db, { ...input, drawer, feeVia, feeOverride });
+      if (
+        feeOverride === undefined &&
+        input.expectedFee !== undefined &&
+        input.expectedFee !== q.fee
+      ) {
         throw new AppError(
           409,
           'FEE_CHANGED',
@@ -143,11 +175,25 @@ export async function createTransaction(input: TransactionInput, actor: Actor, i
         walletChange: q.walletChange,
         cashChange: q.cashChange,
         customerNumber: ('customerNumber' in input && input.customerNumber) || null,
+        customerName: ('customerName' in input && input.customerName) || null,
+        feeVia: q.feeVia,
         referenceNo: input.referenceNo ?? null,
         telco: input.type === 'ELOAD' ? input.telco : null,
         createdBy: actor.id,
       });
       await repo.changeBalance(db, wallet.id, q.walletChange);
+      if (feeOverride !== undefined && feeOverride !== q.standardFee) {
+        // Income the store chose not to earn (or earned extra): the owner sees it in the audit log.
+        await writeAudit(db, {
+          userId: actor.id,
+          action: 'EWALLET_FEE_CHANGED',
+          entity: 'ewallet_transaction',
+          entityId: id,
+          before: { standardFee: q.standardFee },
+          after: { fee: q.fee, type: input.type, amount: input.amount },
+          ip,
+        });
+      }
       if (OWNER_ONLY.has(input.type)) {
         // The owner moving float in or out: traceable, like expenses (plan 8.2 A09).
         await writeAudit(db, {

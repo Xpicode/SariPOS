@@ -241,6 +241,8 @@ export type EwalletTxn = {
   walletChange: number;
   cashChange: number; // + into the drawer, − paid out of it
   customerNumber: string | null;
+  customerName: string | null;
+  feeVia: FeeVia; // how the customer paid the fee: cash into the drawer, or GCash into the wallet
   referenceNo: string | null;
   telco: Telco | null;
   cashSessionId: number | null;
@@ -248,8 +250,17 @@ export type EwalletTxn = {
   createdAt: string;
 };
 
-// The server's answer to "what would this cost?", before confirming.
-export type FeeQuote = { fee: number; walletChange: number; cashChange: number };
+export type FeeVia = 'CASH' | 'GCASH';
+
+// The server's answer to "what would this cost?", before confirming. standardFee = what the fee
+// rules say (differs from fee only when the owner typed their own; null = no rule covers it).
+export type FeeQuote = {
+  fee: number;
+  feeVia: FeeVia;
+  walletChange: number;
+  cashChange: number;
+  standardFee: number | null;
+};
 
 export type FeeRule = {
   walletKind: WalletKind;

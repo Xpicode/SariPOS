@@ -1,14 +1,5 @@
 import { useMutation } from '@tanstack/react-query';
-import {
-  ArrowDownToLine,
-  ArrowUpFromLine,
-  Banknote,
-  Send,
-  Settings2,
-  Smartphone,
-  TriangleAlert,
-  type LucideIcon,
-} from 'lucide-react';
+import { ArrowDownToLine, ArrowUpFromLine, Plus, Settings2, TriangleAlert } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { api } from '@/api/client';
@@ -34,6 +25,7 @@ import {
   parseBp,
   TELCOS,
   TXN_LABEL,
+  breakdown,
   WALLET_KIND_LABEL,
 } from '@/lib/ewallet';
 import { centavosToInput, formatPeso, parsePeso } from '@/lib/money';
@@ -205,24 +197,29 @@ function WalletSettingsDialog({ w, onClose }: { w: Wallet; onClose: () => void }
   );
 }
 
-const ACTIONS: { type: EwalletTxnType; label: string; hint: string; icon: LucideIcon }[] = [
-  { type: 'CASH_IN', label: 'Cash-in', hint: 'Customer gives cash', icon: Send },
-  { type: 'CASH_OUT', label: 'Cash-out', hint: 'Customer gets cash', icon: Banknote },
-  { type: 'ELOAD', label: 'Load', hint: 'Globe, Smart, DITO…', icon: Smartphone },
-];
+// What the counter did with cash for one transaction, in plain words.
+function cashLine(t: EwalletTxn): [string, number] | null {
+  if (t.cashChange === 0) return null;
+  if (t.type === 'TOP_UP') return ['From the drawer', -t.cashChange];
+  if (t.type === 'WITHDRAW') return ['Into the drawer', t.cashChange];
+  return t.cashChange > 0 ? ['Collected', t.cashChange] : ['Given', -t.cashChange];
+}
 
-// One row: what happened on the left; what it did to the drawer (the cashier's pocket) and to
-// the wallet on the right.
+// One row: what happened on the left; the breakdown on the right: the amount, the fee the store
+// earned, and the cash that changed hands (Cash-in ₱1,000 + fee ₱20 = collected ₱1,020).
 function TxnRow({ t, isOwner }: { t: EwalletTxn; isOwner: boolean }) {
+  const cash = cashLine(t);
+  const hasFee = t.type === 'CASH_IN' || t.type === 'CASH_OUT' || t.type === 'ELOAD';
   return (
-    <li className="grid grid-cols-[1fr_auto] gap-x-4 px-5 py-3.5">
+    <li className="grid gap-x-6 gap-y-2 px-5 py-3.5 sm:grid-cols-[1fr_auto]">
       <div className="min-w-0">
         <p className="text-[15px] font-semibold">
-          {TXN_LABEL[t.type]} {formatPeso(t.amount)}
+          {TXN_LABEL[t.type]}
           {t.telco && <span className="font-normal"> · {telcoLabel(t.telco)}</span>}
         </p>
         <p className="text-sm break-words text-muted-foreground">
           {formatClock(t.createdAt)} · {t.accountName}
+          {t.customerName && ` · ${t.customerName}`}
           {t.customerNumber && (
             <>
               {' · '}
@@ -238,16 +235,92 @@ function TxnRow({ t, isOwner }: { t: EwalletTxn; isOwner: boolean }) {
           {isOwner && ` · ${t.createdBy}`}
         </p>
       </div>
-      <div className="text-right font-mono text-sm tabular-nums">
-        <p className={cn('text-[15px] font-semibold', t.cashChange < 0 && 'text-destructive')}>
-          {t.cashChange === 0 ? 'no cash' : `${signed(t.cashChange)} cash`}
-        </p>
-        <p className="text-muted-foreground">
-          {signed(t.walletChange)} wallet
-          {t.fee > 0 && ` · earned ${formatPeso(t.fee)}`}
-        </p>
-      </div>
+      <dl className="grid min-w-52 grid-cols-[auto_1fr] gap-x-4 text-sm">
+        <dt className="text-muted-foreground">Amount</dt>
+        <dd className="text-right font-mono tabular-nums">{formatPeso(t.amount)}</dd>
+        {hasFee && (
+          <>
+            <dt className="text-muted-foreground">
+              {t.type === 'ELOAD' ? 'Commission' : 'Fee'}
+              {t.feeVia === 'GCASH' && ' (GCash)'}
+            </dt>
+            <dd className="text-right font-mono tabular-nums">{formatPeso(t.fee)}</dd>
+          </>
+        )}
+        {cash ? (
+          <>
+            <dt className="font-semibold">{cash[0]}</dt>
+            <dd
+              className={cn(
+                'text-right font-mono font-semibold tabular-nums',
+                cash[0] === 'Given' && 'text-destructive',
+              )}
+            >
+              {formatPeso(cash[1])} cash
+            </dd>
+          </>
+        ) : (
+          <>
+            <dt className="text-muted-foreground">Cash</dt>
+            <dd className="text-right text-muted-foreground">not touched</dd>
+          </>
+        )}
+        <dt className="text-muted-foreground">Wallet</dt>
+        <dd className="text-right font-mono text-muted-foreground tabular-nums">
+          {signed(t.walletChange)}
+        </dd>
+      </dl>
     </li>
+  );
+}
+
+// Totals per type for the day (or shift): "Cash-in · 3 · ₱2,500.00 · fees ₱50.00".
+function Breakdown({ txns }: { txns: EwalletTxn[] }) {
+  const { rows, totalFee } = breakdown(txns);
+  return (
+    <table className="w-full text-sm">
+      <caption className="sr-only">Breakdown by type</caption>
+      <thead>
+        <tr className="border-y bg-muted/50 text-left text-muted-foreground">
+          <th scope="col" className="px-5 py-2 font-medium">
+            Type
+          </th>
+          <th scope="col" className="px-2 py-2 text-right font-medium">
+            Count
+          </th>
+          <th scope="col" className="px-2 py-2 text-right font-medium">
+            Amount
+          </th>
+          <th scope="col" className="px-5 py-2 text-right font-medium">
+            Fees earned
+          </th>
+        </tr>
+      </thead>
+      <tbody className="font-mono tabular-nums">
+        {rows.map((r) => (
+          <tr key={r.type} className="border-b">
+            <th scope="row" className="px-5 py-2 text-left font-sans font-medium">
+              {TXN_LABEL[r.type]}
+            </th>
+            <td className="px-2 py-2 text-right">{r.count}</td>
+            <td className="px-2 py-2 text-right">{formatPeso(r.amount)}</td>
+            <td className="px-5 py-2 text-right">
+              {r.type === 'TOP_UP' || r.type === 'WITHDRAW' ? '—' : formatPeso(r.fee)}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+      <tfoot>
+        <tr>
+          <th scope="row" colSpan={3} className="px-5 py-2.5 text-left font-semibold">
+            Total fees and commission
+          </th>
+          <td className="px-5 py-2.5 text-right font-mono font-semibold tabular-nums">
+            {formatPeso(totalFee)}
+          </td>
+        </tr>
+      </tfoot>
+    </table>
   );
 }
 
@@ -264,7 +337,6 @@ export function EwalletPage() {
   const [settings, setSettings] = useState<Wallet | null>(null);
 
   const drawerClosed = session.data === null;
-  const earned = txns.data?.reduce((s, t) => s + t.fee, 0) ?? 0;
 
   return (
     <div className="grid gap-6">
@@ -315,23 +387,15 @@ export function EwalletPage() {
                   first: cash-in, cash-out and load all move cash.
                 </p>
               )}
-              <div className="grid grid-cols-3 gap-3">
-                {ACTIONS.map(({ type, label, hint, icon: Icon }) => (
-                  <button
-                    key={type}
-                    type="button"
-                    disabled={drawerClosed}
-                    onClick={() => setDialog({ type })}
-                    className="grid justify-items-center gap-1.5 rounded-2xl border bg-card px-2 py-5 text-center shadow-sm outline-none transition-colors hover:border-primary/50 hover:bg-accent/40 focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
-                  >
-                    <span className="grid size-11 place-items-center rounded-full bg-accent text-accent-foreground">
-                      <Icon className="size-5" aria-hidden />
-                    </span>
-                    <span className="text-base font-bold">{label}</span>
-                    <span className="hidden text-sm text-muted-foreground sm:block">{hint}</span>
-                  </button>
-                ))}
-              </div>
+              <Button
+                size="lg"
+                disabled={drawerClosed}
+                onClick={() => setDialog({ type: 'CASH_IN' })}
+                className="h-14 text-lg"
+              >
+                <Plus aria-hidden />
+                New transaction
+              </Button>
             </section>
           </div>
         )}
@@ -345,11 +409,6 @@ export function EwalletPage() {
               <h2 id="txns-title" className="text-base font-bold">
                 {isOwner ? (day === today ? 'Today' : formatDate(day)) : 'This shift'}
               </h2>
-              {earned > 0 && (
-                <p className="text-sm text-muted-foreground">
-                  Fees and commission: {formatPeso(earned)}
-                </p>
-              )}
             </div>
             {isOwner && (
               <div className="grid gap-1.5">
@@ -376,11 +435,14 @@ export function EwalletPage() {
               Nothing yet. Transactions appear here after you save them.
             </p>
           ) : (
-            <ul className="divide-y border-t">
-              {txns.data.map((t) => (
-                <TxnRow key={t.id} t={t} isOwner={isOwner} />
-              ))}
-            </ul>
+            <>
+              <Breakdown txns={txns.data} />
+              <ul className="divide-y border-t" aria-label="Transactions">
+                {txns.data.map((t) => (
+                  <TxnRow key={t.id} t={t} isOwner={isOwner} />
+                ))}
+              </ul>
+            </>
           )}
         </section>
       </div>

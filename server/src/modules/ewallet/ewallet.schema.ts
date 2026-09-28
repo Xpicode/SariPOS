@@ -18,7 +18,8 @@ const referenceNo = z
   .pipe(z.string().regex(/^[0-9A-Za-z-]{4,40}$/, 'Enter the reference number from the receipt'));
 
 // The client says WHAT happened (type, wallet, amount). The fee and both pocket changes are
-// computed by the server (fee.ts), never taken from the request.
+// computed by the server (fee.ts), never taken from the request. (One exception: the owner may
+// set the fee, see feeOverride. The pocket changes are still computed here.)
 const base = {
   idempotencyKey: z.uuid('Invalid request key'), // made when the dialog opens: double tap = 1 row
   accountId,
@@ -28,19 +29,42 @@ const base = {
   expectedFee: z.number().int().min(0).optional(),
 };
 
+const customerName = z.string().trim().min(1).max(100, 'Name is too long').optional();
+const feeVia = z.enum(['CASH', 'GCASH']).default('CASH'); // how the customer paid the fee
+// A fee typed by the OWNER instead of the fee rules (a suki discount). Cashiers get a 403: the
+// fee is the store's income, so only the owner decides to charge less (checked in the service).
+const feeOverride = z
+  .number()
+  .int()
+  .min(0, 'The fee can’t be negative')
+  .max(MAX_CENTAVOS, 'That fee is too large')
+  .optional();
+
 export const transactionSchema = z.discriminatedUnion('type', [
-  z.object({ ...base, type: z.literal('CASH_IN'), customerNumber: phone, referenceNo }),
+  z.object({
+    ...base,
+    type: z.literal('CASH_IN'),
+    customerNumber: phone,
+    customerName,
+    referenceNo,
+    feeVia,
+    feeOverride,
+  }),
   z.object({
     ...base,
     type: z.literal('CASH_OUT'),
     customerNumber: phone.optional(),
+    customerName,
     referenceNo,
+    feeVia,
+    feeOverride,
   }),
   z.object({
     ...base,
     type: z.literal('ELOAD'),
     telco: z.enum(TELCOS, 'Pick the network'),
     customerNumber: phone,
+    customerName,
     referenceNo: referenceNo.optional(),
   }),
   // Owner only (checked in the service). drawer = the cash comes from / goes into the drawer.
@@ -58,11 +82,15 @@ export const transactionSchema = z.discriminatedUnion('type', [
   }),
 ]);
 
+// Just math, nothing saved: feeOverride is allowed here for anyone (the owner's form uses it to
+// show the summary); the real transaction is where only the owner may use it.
 export const feePreviewSchema = z.object({
   accountId,
   type: z.enum(['CASH_IN', 'CASH_OUT', 'ELOAD', 'TOP_UP', 'WITHDRAW']),
   amount,
   drawer: z.boolean().optional(),
+  feeVia: z.enum(['CASH', 'GCASH']).optional(),
+  feeOverride,
 });
 
 export const updateAccountSchema = z

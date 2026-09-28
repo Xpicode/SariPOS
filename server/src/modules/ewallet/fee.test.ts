@@ -53,24 +53,28 @@ describe('quote = the money-flow table', () => {
   it('Cash-in ₱500: wallet −500, drawer +510, earns 10', () =>
     assert.deepEqual(quote('CASH_IN', c(500), { rules }), {
       fee: c(10),
+      feeVia: 'CASH',
       walletChange: -c(500),
       cashChange: c(510),
     }));
   it('Cash-out ₱500: wallet +500, drawer −490, earns 10', () =>
     assert.deepEqual(quote('CASH_OUT', c(500), { rules }), {
       fee: c(10),
+      feeVia: 'CASH',
       walletChange: c(500),
       cashChange: -c(490),
     }));
   it('E-load ₱100 at 3%: wallet −97, drawer +100, earns 3', () =>
     assert.deepEqual(quote('ELOAD', c(100), { commissionBp: 300 }), {
       fee: c(3),
+      feeVia: 'CASH',
       walletChange: -c(97),
       cashChange: c(100),
     }));
   it('Top-up ₱2,000 from the drawer: wallet +2000, drawer −2000', () =>
     assert.deepEqual(quote('TOP_UP', c(2000), { drawer: true }), {
       fee: 0,
+      feeVia: 'CASH',
       walletChange: c(2000),
       cashChange: -c(2000),
     }));
@@ -79,6 +83,7 @@ describe('quote = the money-flow table', () => {
   it('Withdraw ₱1,000 into the drawer: wallet −1000, drawer +1000', () =>
     assert.deepEqual(quote('WITHDRAW', c(1000), { drawer: true }), {
       fee: 0,
+      feeVia: 'CASH',
       walletChange: -c(1000),
       cashChange: c(1000),
     }));
@@ -86,6 +91,9 @@ describe('quote = the money-flow table', () => {
     for (const [type, opts] of [
       ['CASH_IN', { rules }],
       ['CASH_OUT', { rules }],
+      ['CASH_IN', { rules, feeVia: 'GCASH' }],
+      ['CASH_OUT', { rules, feeVia: 'GCASH' }],
+      ['CASH_OUT', { rules, fee: c(5) }],
       ['ELOAD', { commissionBp: 300 }],
     ] as const) {
       const q = quote(type, c(750), opts);
@@ -97,4 +105,36 @@ describe('quote = the money-flow table', () => {
       code(() => quote('CASH_OUT', c(10), { rules })),
       'AMOUNT_TOO_SMALL',
     ));
+});
+
+describe('fee paid by GCash (plan 6.4 + migration 0011)', () => {
+  it('Cash-in ₱500, fee by GCash: drawer +500, wallet −490 (the ₱10 arrives in GCash)', () =>
+    assert.deepEqual(quote('CASH_IN', c(500), { rules, feeVia: 'GCASH' }), {
+      fee: c(10),
+      feeVia: 'GCASH',
+      walletChange: -c(490),
+      cashChange: c(500),
+    }));
+  it('Cash-out ₱500, fee by GCash: customer sends ₱510, gets the full ₱500 cash', () =>
+    assert.deepEqual(quote('CASH_OUT', c(500), { rules, feeVia: 'GCASH' }), {
+      fee: c(10),
+      feeVia: 'GCASH',
+      walletChange: c(510),
+      cashChange: -c(500),
+    }));
+  it('a ₱10 cash-out is fine when the ₱10 fee comes by GCash (nothing is taken from it)', () =>
+    assert.equal(quote('CASH_OUT', c(10), { rules, feeVia: 'GCASH' }).cashChange, -c(10)));
+  it('load has no customer fee: feeVia is ignored', () =>
+    assert.equal(quote('ELOAD', c(100), { commissionBp: 300, feeVia: 'GCASH' }).feeVia, 'CASH'));
+});
+
+describe("the owner's own fee", () => {
+  it('replaces the fee rules (₱500 cash-in for a suki: ₱5 instead of ₱10)', () =>
+    assert.equal(quote('CASH_IN', c(500), { rules, fee: c(5) }).cashChange, c(505)));
+  it('can be ₱0', () =>
+    assert.equal(quote('CASH_OUT', c(500), { rules, fee: 0 }).cashChange, -c(500)));
+  it('works even where no fee rule exists', () =>
+    assert.equal(quote('CASH_IN', c(50_000), { rules, fee: c(100) }).fee, c(100)));
+  it('does not apply to load (the commission is a wallet setting)', () =>
+    assert.equal(quote('ELOAD', c(100), { commissionBp: 300, fee: c(50) }).fee, c(3)));
 });

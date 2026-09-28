@@ -1,5 +1,6 @@
 import {
   ChartColumn,
+  ChevronDown,
   HandCoins,
   LayoutDashboard,
   LogOut,
@@ -29,24 +30,89 @@ import { roleLabel } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 
 type NavItem = { label: string; icon: LucideIcon; to: string; roles?: Role[] };
+type NavGroup = { id: string; title?: string; items: NavItem[] };
 
-// No `roles` = everyone.
-const NAV: NavItem[] = [
-  { label: 'Overview', icon: LayoutDashboard, to: '/' },
-  { label: 'Sell', icon: ShoppingCart, to: '/sell' },
-  { label: 'Sales', icon: ReceiptText, to: '/sales' },
-  { label: 'Products', icon: Package, to: '/products' },
-  { label: 'Stock in', icon: PackagePlus, to: '/stock-in', roles: ['OWNER'] },
-  { label: 'Utang', icon: NotebookPen, to: '/customers' },
-  { label: 'GCash & Load', icon: Smartphone, to: '/ewallet' },
-  { label: 'Cash drawer', icon: Wallet, to: '/drawer' },
-  { label: 'Expenses', icon: HandCoins, to: '/expenses', roles: ['OWNER'] },
-  { label: 'Reports', icon: ChartColumn, to: '/reports', roles: ['OWNER'] },
-  { label: 'Users', icon: Users, to: '/users', roles: ['OWNER'] },
+// No `roles` = everyone. A group with nothing left for this role isn't shown at all.
+const NAV: NavGroup[] = [
+  { id: 'home', items: [{ label: 'Overview', icon: LayoutDashboard, to: '/' }] },
+  {
+    id: 'sales',
+    title: 'Sales',
+    items: [
+      { label: 'Sell', icon: ShoppingCart, to: '/sell' },
+      { label: 'Sales', icon: ReceiptText, to: '/sales' },
+      { label: 'Utang', icon: NotebookPen, to: '/customers' },
+      { label: 'GCash & Load', icon: Smartphone, to: '/ewallet' },
+    ],
+  },
+  {
+    id: 'inventory',
+    title: 'Inventory',
+    items: [
+      { label: 'Products', icon: Package, to: '/products' },
+      { label: 'Stock in', icon: PackagePlus, to: '/stock-in', roles: ['OWNER'] },
+    ],
+  },
+  {
+    id: 'finance',
+    title: 'Finance',
+    items: [
+      { label: 'Cash drawer', icon: Wallet, to: '/drawer' },
+      { label: 'Expenses', icon: HandCoins, to: '/expenses', roles: ['OWNER'] },
+      { label: 'Reports', icon: ChartColumn, to: '/reports', roles: ['OWNER'] },
+    ],
+  },
+  {
+    id: 'store',
+    title: 'Store',
+    items: [{ label: 'Users', icon: Users, to: '/users', roles: ['OWNER'] }],
+  },
 ];
 
-// compact = icons only (collapsed sidebar). The label stays in the link for screen readers,
-// and shows as a tooltip on hover.
+// Which sections are folded: a per-device convenience, like the collapsed sidebar below.
+const CLOSED_KEY = 'saripos.navGroupsClosed';
+function readClosed(): string[] {
+  try {
+    const v: unknown = JSON.parse(localStorage.getItem(CLOSED_KEY) ?? '[]');
+    return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function NavItemLink({
+  item: { label, icon: Icon, to },
+  compact,
+  onNavigate,
+}: {
+  item: NavItem;
+  compact: boolean;
+  onNavigate?: () => void;
+}) {
+  return (
+    <NavLink
+      to={to}
+      end={to === '/'} // only Overview needs an exact match; /products/5 keeps Products lit
+      onClick={onNavigate}
+      title={compact ? label : undefined}
+      className={({ isActive }) =>
+        cn(
+          'flex h-10 items-center gap-3 rounded-lg text-[15px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+          compact ? 'justify-center' : 'px-3',
+          isActive
+            ? 'bg-primary/12 font-semibold text-foreground'
+            : 'font-medium text-foreground/80 hover:bg-muted hover:text-foreground',
+        )
+      }
+    >
+      <Icon className="size-[18px] shrink-0" aria-hidden />
+      <span className={cn('truncate', compact && 'sr-only')}>{label}</span>
+    </NavLink>
+  );
+}
+
+// compact = icons only (collapsed sidebar): no section titles, just a thin line between sections.
+// The label stays in each link for screen readers, and shows as a tooltip on hover.
 function NavList({
   role,
   compact = false,
@@ -56,30 +122,56 @@ function NavList({
   compact?: boolean;
   onNavigate?: () => void;
 }) {
-  const items = NAV.filter((i) => !i.roles || i.roles.includes(role));
+  const [closed, setClosed] = useState(readClosed);
+  const groups = NAV.map((g) => ({
+    ...g,
+    items: g.items.filter((i) => !i.roles || i.roles.includes(role)),
+  })).filter((g) => g.items.length > 0);
+
+  function toggle(id: string) {
+    setClosed((c) => {
+      const next = c.includes(id) ? c.filter((x) => x !== id) : [...c, id];
+      try {
+        localStorage.setItem(CLOSED_KEY, JSON.stringify(next));
+      } catch {
+        // ignore: it just won't be remembered
+      }
+      return next;
+    });
+  }
+
   return (
-    <nav aria-label="Main" className="grid gap-1">
-      {items.map(({ label, icon: Icon, to }) => (
-        <NavLink
-          key={label}
-          to={to}
-          end={to === '/'} // only Overview needs an exact match; /products/5 keeps Products lit
-          onClick={onNavigate}
-          title={compact ? label : undefined}
-          className={({ isActive }) =>
-            cn(
-              'relative flex h-11 items-center gap-3 rounded-lg text-[15px] font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
-              compact ? 'justify-center' : 'px-3',
-              isActive
-                ? 'bg-accent text-accent-foreground before:absolute before:inset-y-2.5 before:left-0 before:w-[3px] before:rounded-full before:bg-primary'
-                : 'text-foreground/80 hover:bg-muted hover:text-foreground',
-            )
-          }
-        >
-          <Icon className="size-[18px] shrink-0" aria-hidden />
-          <span className={cn(compact && 'sr-only')}>{label}</span>
-        </NavLink>
-      ))}
+    <nav aria-label="Main" className={cn('grid', compact ? 'gap-2' : 'gap-4')}>
+      {groups.map((g, i) => {
+        const open = compact || !g.title || !closed.includes(g.id);
+        const listId = `nav-${g.id}`;
+        return (
+          <div key={g.id} className={cn(compact && i > 0 && 'border-t pt-2')}>
+            {g.title && !compact && (
+              <button
+                type="button"
+                onClick={() => toggle(g.id)}
+                aria-expanded={open}
+                aria-controls={listId}
+                className="mb-1 flex h-8 w-full items-center justify-between rounded-md px-3 text-xs font-semibold tracking-wider text-muted-foreground uppercase outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              >
+                {g.title}
+                <ChevronDown
+                  aria-hidden
+                  className={cn('size-4 transition-transform', !open && '-rotate-90')}
+                />
+              </button>
+            )}
+            <ul id={listId} hidden={!open} className="grid gap-0.5">
+              {g.items.map((item) => (
+                <li key={item.label}>
+                  <NavItemLink item={item} compact={compact} onNavigate={onNavigate} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })}
     </nav>
   );
 }

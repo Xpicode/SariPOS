@@ -40,3 +40,19 @@ export function parseBp(input: string): number | null {
   const bp = Number(m[1]) * 100 + Number((m[2] ?? '').padEnd(2, '0'));
   return bp <= 5000 ? bp : null;
 }
+
+// Per-type totals for the breakdown table: how many, how much money moved, how much the store
+// earned. Fixed order (counter types first); types with no transactions are left out.
+const BREAKDOWN_ORDER: EwalletTxnType[] = ['CASH_IN', 'CASH_OUT', 'ELOAD', 'TOP_UP', 'WITHDRAW'];
+export function breakdown(txns: { type: EwalletTxnType; amount: number; fee: number }[]) {
+  const rows = BREAKDOWN_ORDER.map((type) => {
+    const of = txns.filter((t) => t.type === type);
+    return {
+      type,
+      count: of.length,
+      amount: of.reduce((s, t) => s + t.amount, 0),
+      fee: of.reduce((s, t) => s + t.fee, 0),
+    };
+  }).filter((r) => r.count > 0);
+  return { rows, totalFee: rows.reduce((s, r) => s + r.fee, 0) };
+}
