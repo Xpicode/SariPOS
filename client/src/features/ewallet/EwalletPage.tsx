@@ -1,5 +1,12 @@
 import { useMutation } from '@tanstack/react-query';
-import { ArrowDownToLine, ArrowUpFromLine, Plus, Settings2, TriangleAlert } from 'lucide-react';
+import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  Plus,
+  Settings2,
+  TriangleAlert,
+  Wallet as WalletIcon,
+} from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { api } from '@/api/client';
@@ -375,27 +382,30 @@ export function EwalletPage() {
             </section>
 
             <section aria-label="New transaction" className="grid gap-3">
-              {drawerClosed && (
-                <p className="rounded-2xl border border-dashed px-5 py-4 text-[15px] text-muted-foreground">
-                  Open the{' '}
-                  <Link
-                    to="/drawer"
-                    className="font-semibold text-primary underline-offset-2 hover:underline"
-                  >
-                    cash drawer
-                  </Link>{' '}
-                  first: cash-in, cash-out and load all move cash.
-                </p>
+              {/* A greyed-out button looked broken. With the drawer closed, the one thing to do
+                  is open it, so that is the button, with the reason right under it. */}
+              {drawerClosed ? (
+                <>
+                  <Button size="lg" asChild className="h-14 text-lg">
+                    <Link to="/drawer">
+                      <WalletIcon aria-hidden />
+                      Open the cash drawer
+                    </Link>
+                  </Button>
+                  <p className="text-center text-sm text-muted-foreground">
+                    Cash-in, cash-out and load all move cash, so the drawer must be open first.
+                  </p>
+                </>
+              ) : (
+                <Button
+                  size="lg"
+                  onClick={() => setDialog({ type: 'CASH_IN' })}
+                  className="h-14 text-lg"
+                >
+                  <Plus aria-hidden />
+                  New transaction
+                </Button>
               )}
-              <Button
-                size="lg"
-                disabled={drawerClosed}
-                onClick={() => setDialog({ type: 'CASH_IN' })}
-                className="h-14 text-lg"
-              >
-                <Plus aria-hidden />
-                New transaction
-              </Button>
             </section>
           </div>
         )}
