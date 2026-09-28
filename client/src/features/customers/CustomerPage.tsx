@@ -27,7 +27,10 @@ function Entry({ e }: { e: LedgerEntry }) {
           {e.saleNo && (
             <>
               {' · '}
-              <Link to={`/sales/${e.saleId}`} className="font-mono text-sm font-normal text-primary underline-offset-2 hover:underline">
+              <Link
+                to={`/sales/${e.saleId}`}
+                className="font-mono text-sm font-normal text-primary underline-offset-2 hover:underline"
+              >
                 {e.saleNo}
               </Link>
             </>
@@ -39,7 +42,12 @@ function Entry({ e }: { e: LedgerEntry }) {
         </p>
       </div>
       <div className="text-right font-mono tabular-nums">
-        <p className={cn('text-[15px] font-semibold', e.amount < 0 ? 'text-primary' : 'text-foreground')}>
+        <p
+          className={cn(
+            'text-[15px] font-semibold',
+            e.amount < 0 ? 'text-primary' : 'text-foreground',
+          )}
+        >
           {e.amount < 0 ? '−' : '+'}
           {formatPeso(Math.abs(e.amount))}
         </p>
@@ -56,12 +64,21 @@ export function CustomerPage() {
   const [dialog, setDialog] = useState<'pay' | 'remind' | 'edit' | null>(null);
 
   const back = (
-    <Link to="/customers" className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground">
+    <Link
+      to="/customers"
+      className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground"
+    >
       <ArrowLeft className="size-4" aria-hidden />
       Utang
     </Link>
   );
-  if (statement.isPending) return <div className="grid gap-6">{back}<p>Loading…</p></div>;
+  if (statement.isPending)
+    return (
+      <div className="grid gap-6">
+        {back}
+        <p>Loading…</p>
+      </div>
+    );
   if (statement.isError) {
     return (
       <div className="grid gap-6">
@@ -80,7 +97,9 @@ export function CustomerPage() {
           <h1 className="flex flex-wrap items-center gap-3 text-3xl font-bold tracking-tight">
             {c.name}
             {c.isBlocked && (
-              <span className="rounded-full bg-destructive/10 px-2.5 py-0.5 text-sm font-bold tracking-normal text-destructive">Blocked</span>
+              <span className="rounded-full bg-destructive/10 px-2.5 py-0.5 text-sm font-bold tracking-normal text-destructive">
+                Blocked
+              </span>
             )}
           </h1>
           {(c.phone || c.address) && (
@@ -109,16 +128,30 @@ export function CustomerPage() {
         </div>
       </header>
 
-      <section aria-label="Balance" className="grid gap-3 rounded-2xl border bg-card p-5 shadow-sm sm:p-6">
-        <p className="text-sm font-semibold text-muted-foreground">{c.balance < 0 ? 'The store owes them' : 'Owes the store'}</p>
-        <p className="font-mono text-4xl font-bold tracking-tight tabular-nums">{formatPeso(Math.abs(c.balance))}</p>
+      <section
+        aria-label="Balance"
+        className="grid gap-3 rounded-2xl border bg-card p-5 shadow-sm sm:p-6"
+      >
+        <p className="text-sm font-semibold text-muted-foreground">
+          {c.balance < 0 ? 'The store owes them' : 'Owes the store'}
+        </p>
+        <p className="font-mono text-4xl font-bold tracking-tight tabular-nums">
+          {formatPeso(Math.abs(c.balance))}
+        </p>
         <LimitBar c={c} className="max-w-sm" />
       </section>
 
-      <section aria-labelledby="statement-title" className="overflow-hidden rounded-2xl border bg-card shadow-sm">
-        <h2 id="statement-title" className="px-5 pt-5 pb-2 text-base font-bold">Statement</h2>
+      <section
+        aria-labelledby="statement-title"
+        className="overflow-hidden rounded-2xl border bg-card shadow-sm"
+      >
+        <h2 id="statement-title" className="px-5 pt-5 pb-2 text-base font-bold">
+          Statement
+        </h2>
         {entries.length === 0 ? (
-          <p className="px-5 pb-5 text-[15px] text-muted-foreground">No utang yet. Choose Utang when paying at Sell.</p>
+          <p className="px-5 pb-5 text-[15px] text-muted-foreground">
+            No utang yet. Choose Utang when paying at Sell.
+          </p>
         ) : (
           <ul className="divide-y border-t">
             {entries.map((e) => (

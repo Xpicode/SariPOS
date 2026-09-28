@@ -34,5 +34,7 @@ export function useAfterSale() {
     if (sale) queryClient.setQueryData(['sales', 'detail', sale.id], sale);
     queryClient.invalidateQueries({ queryKey: ['sales'] });
     queryClient.invalidateQueries({ queryKey: ['products'] });
+    queryClient.invalidateQueries({ queryKey: ['customers'] }); // utang balances
+    queryClient.invalidateQueries({ queryKey: ['cash-session'] });
   };
 }

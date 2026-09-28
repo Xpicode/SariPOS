@@ -53,7 +53,10 @@ export function CustomerPicker({
   return (
     <div className="grid gap-2">
       <div className="relative">
-        <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
+        <Search
+          className="pointer-events-none absolute top-1/2 left-3.5 size-4.5 -translate-y-1/2 text-muted-foreground"
+          aria-hidden
+        />
         <Input
           type="search"
           autoFocus
@@ -87,11 +90,22 @@ export function CustomerPicker({
                   className="flex w-full items-center gap-3 px-4 py-3 text-left outline-none hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset disabled:cursor-not-allowed"
                 >
                   <span className="min-w-0 flex-1">
-                    <span className={cn('block text-[15px] font-semibold', reason && 'text-muted-foreground')}>
+                    <span
+                      className={cn(
+                        'block text-[15px] font-semibold',
+                        reason && 'text-muted-foreground',
+                      )}
+                    >
                       {c.name}
                     </span>
-                    <span className={cn('block text-sm', reason ? 'font-medium text-destructive' : 'text-muted-foreground')}>
-                      {reason ?? `Owes ${formatPeso(c.balance)} · limit ${formatPeso(c.creditLimit)}`}
+                    <span
+                      className={cn(
+                        'block text-sm',
+                        reason ? 'font-medium text-destructive' : 'text-muted-foreground',
+                      )}
+                    >
+                      {reason ??
+                        `Owes ${formatPeso(c.balance)} · limit ${formatPeso(c.creditLimit)}`}
                     </span>
                   </span>
                 </button>

@@ -9,6 +9,9 @@ import { ApiError } from '@/api/client';
 import { AuthProvider } from '@/auth/AuthProvider';
 import { ProtectedRoute, RoleGate } from '@/auth/guards';
 import { AppLayout } from '@/components/AppLayout';
+import { AgingPage } from '@/features/customers/AgingPage';
+import { CustomerPage } from '@/features/customers/CustomerPage';
+import { CustomersPage } from '@/features/customers/CustomersPage';
 import { DrawerPage } from '@/features/drawer/DrawerPage';
 import { EndOfDayPage } from '@/features/drawer/EndOfDayPage';
 import { ExpensesPage } from '@/features/drawer/ExpensesPage';
@@ -52,6 +55,9 @@ const router = createBrowserRouter([
           { path: 'drawer/close', element: <EndOfDayPage /> },
           { path: 'drawer/:id', element: ownerOnly(<ShiftReportPage />) },
           { path: 'expenses', element: ownerOnly(<ExpensesPage />) },
+          { path: 'customers', element: <CustomersPage /> },
+          { path: 'customers/aging', element: ownerOnly(<AgingPage />) },
+          { path: 'customers/:id', element: <CustomerPage /> },
           { path: 'products', element: <ProductsPage /> },
           { path: 'products/new', element: ownerOnly(<ProductFormPage />) },
           { path: 'products/:id', element: <ProductDetailPage /> },

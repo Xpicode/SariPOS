@@ -60,6 +60,7 @@ export function Receipt({ sale }: { sale: Sale }) {
       ) : (
         <>
           <Row label="Paid by">{PAYMENT_LABEL[sale.paymentType]}</Row>
+          {sale.customerName && <Row label="Customer">{sale.customerName}</Row>}
           {sale.gcashRefNo && <Row label="Ref no.">{sale.gcashRefNo}</Row>}
         </>
       )}

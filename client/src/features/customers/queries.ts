@@ -16,8 +16,7 @@ export function useCustomers(search = '') {
 export function useStatement(id: number) {
   return useQuery({
     queryKey: ['customers', 'statement', id],
-    queryFn: () =>
-      api<{ customer: Customer; entries: LedgerEntry[] }>(`/customers/${id}/ledger`),
+    queryFn: () => api<{ customer: Customer; entries: LedgerEntry[] }>(`/customers/${id}/ledger`),
   });
 }
 

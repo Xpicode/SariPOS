@@ -1130,13 +1130,13 @@ WHERE cash_session_id = $1;
 **You'll learn:** Ledger balances, business-rule validation, date math in SQL.
 
 **Tasks**
-- [ ] Customers CRUD, list with **computed balance**
-- [ ] In checkout: payment type UTANG → pick customer → check limit/blocked → insert CHARGE in the same sale transaction
-- [ ] Receive payment (full/partial) → PAYMENT row (+ counts as cash for the session)
-- [ ] Customer statement page (ledger with running balance)
-- [ ] Aging report (0–7 / 8–15 / 16–30 / 30+)
-- [ ] "Copy reminder message" button (text the owner can paste to Messenger/SMS)
-- [ ] Mask phone numbers for cashier view (`0917****567`)
+- [x] Customers CRUD, list with **computed balance**
+- [x] In checkout: payment type UTANG → pick customer → check limit/blocked → insert CHARGE in the same sale transaction
+- [x] Receive payment (full/partial) → PAYMENT row (+ counts as cash for the session)
+- [x] Customer statement page (ledger with running balance)
+- [x] Aging report (0–7 / 8–15 / 16–30 / 30+)
+- [x] "Copy reminder message" button (text the owner can paste to Messenger/SMS)
+- [x] Mask phone numbers for cashier view (`0917****567`)
 
 **Key code**
 
@@ -1151,10 +1151,10 @@ ORDER BY created_at, id;
 → The window function (`OVER`) adds up the rows step by step, like a bank passbook.
 
 **Done when**
-- [ ] Utang over the limit → blocked with a clear message
-- [ ] Partial payment lowers the balance correctly
-- [ ] Voiding an utang sale reverses the charge
-- [ ] Payments show up in the cash session expected cash
+- [x] Utang over the limit → blocked with a clear message
+- [x] Partial payment lowers the balance correctly
+- [x] Voiding an utang sale reverses the charge
+- [x] Payments show up in the cash session expected cash
 
 ---
 

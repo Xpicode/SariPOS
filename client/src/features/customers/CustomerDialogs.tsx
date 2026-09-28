@@ -23,7 +23,15 @@ import { useAfterCustomerChange } from './queries';
 
 const PHONE_RE = /^(09|\+?639)\d{9}$/; // same rule as the server, before it normalizes
 
-function Footer({ pending, label, onCancel }: { pending: boolean; label: string; onCancel: () => void }) {
+function Footer({
+  pending,
+  label,
+  onCancel,
+}: {
+  pending: boolean;
+  label: string;
+  onCancel: () => void;
+}) {
   return (
     <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
       <Button type="button" variant="outline" onClick={onCancel} disabled={pending}>
@@ -61,7 +69,10 @@ export function CustomerFormDialog({
   const limit = parsePeso(limitText);
   const errors = {
     name: name.trim().length < 2 ? 'Enter the customer’s name' : undefined,
-    phone: cleanPhone && !PHONE_RE.test(cleanPhone) ? 'Use a mobile number like 0917 123 4567' : undefined,
+    phone:
+      cleanPhone && !PHONE_RE.test(cleanPhone)
+        ? 'Use a mobile number like 0917 123 4567'
+        : undefined,
     limit: isOwner && limit === null ? 'Enter the limit, like 500' : undefined,
   };
 
@@ -114,25 +125,64 @@ export function CustomerFormDialog({
         </DialogHeader>
         <form onSubmit={onSubmit} noValidate className="grid gap-5">
           <FormField id="c-name" label="Name" error={err('name')}>
-            <Input id="c-name" autoFocus maxLength={100} value={name} onChange={(e) => setName(e.target.value)} placeholder="Aling Nena" {...fieldAria('c-name', err('name'))} />
+            <Input
+              id="c-name"
+              autoFocus
+              maxLength={100}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Aling Nena"
+              {...fieldAria('c-name', err('name'))}
+            />
           </FormField>
           <FormField id="c-phone" label="Mobile number (optional)" error={err('phone')}>
-            <Input id="c-phone" inputMode="tel" autoComplete="off" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0917 123 4567" {...fieldAria('c-phone', err('phone'))} />
+            <Input
+              id="c-phone"
+              inputMode="tel"
+              autoComplete="off"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="0917 123 4567"
+              {...fieldAria('c-phone', err('phone'))}
+            />
           </FormField>
           <FormField id="c-address" label="Address (optional)">
-            <Input id="c-address" maxLength={255} value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Purok 2, tabi ng simbahan" />
+            <Input
+              id="c-address"
+              maxLength={255}
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="Purok 2, tabi ng simbahan"
+            />
           </FormField>
           {isOwner && (
-            <FormField id="c-limit" label="Utang limit" error={err('limit')} hint="0 = no utang at all.">
-              <MoneyInput id="c-limit" value={limitText} onChange={(e) => setLimitText(e.target.value)} {...fieldAria('c-limit', err('limit'), true)} />
+            <FormField
+              id="c-limit"
+              label="Utang limit"
+              error={err('limit')}
+              hint="0 = no utang at all."
+            >
+              <MoneyInput
+                id="c-limit"
+                value={limitText}
+                onChange={(e) => setLimitText(e.target.value)}
+                {...fieldAria('c-limit', err('limit'), true)}
+              />
             </FormField>
           )}
           {isOwner && editing && (
             <label className="flex items-start gap-3 text-[15px]">
-              <input type="checkbox" checked={blocked} onChange={(e) => setBlocked(e.target.checked)} className="mt-1 size-4.5 accent-primary" />
+              <input
+                type="checkbox"
+                checked={blocked}
+                onChange={(e) => setBlocked(e.target.checked)}
+                className="mt-1 size-4.5 accent-primary"
+              />
               <span>
                 Block new utang
-                <span className="block text-sm text-muted-foreground">They can still pay what they owe.</span>
+                <span className="block text-sm text-muted-foreground">
+                  They can still pay what they owe.
+                </span>
               </span>
             </label>
           )}
@@ -141,7 +191,11 @@ export function CustomerFormDialog({
               {save.error.message}
             </p>
           )}
-          <Footer pending={save.isPending} label={editing ? 'Save changes' : 'Add customer'} onCancel={onClose} />
+          <Footer
+            pending={save.isPending}
+            label={editing ? 'Save changes' : 'Add customer'}
+            onCancel={onClose}
+          />
         </form>
       </DialogContent>
     </Dialog>
@@ -191,9 +245,20 @@ export function PaymentDialog({ customer, onClose }: { customer: Customer; onClo
         </DialogHeader>
         <form onSubmit={onSubmit} noValidate className="grid gap-5">
           <FormField id="pay-amount" label="Amount received" error={showErrors ? error : undefined}>
-            <MoneyInput id="pay-amount" autoFocus value={text} onChange={(e) => setText(e.target.value)} className="h-14 text-2xl" {...fieldAria('pay-amount', showErrors ? error : undefined)} />
+            <MoneyInput
+              id="pay-amount"
+              autoFocus
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              className="h-14 text-2xl"
+              {...fieldAria('pay-amount', showErrors ? error : undefined)}
+            />
           </FormField>
-          <Button type="button" variant="outline" onClick={() => setText(centavosToInput(customer.balance))}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setText(centavosToInput(customer.balance))}
+          >
             Pays it all: {formatPeso(customer.balance)}
           </Button>
           {pay.isError && (

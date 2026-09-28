@@ -167,7 +167,14 @@ export type Sale = {
 // A row in the sales list.
 export type SaleSummary = Pick<
   Sale,
-  'id' | 'saleNo' | 'createdAt' | 'paymentType' | 'total' | 'status' | 'cashierName' | 'customerName'
+  | 'id'
+  | 'saleNo'
+  | 'createdAt'
+  | 'paymentType'
+  | 'total'
+  | 'status'
+  | 'cashierName'
+  | 'customerName'
 > & { itemCount: number };
 
 // An utang customer. Cashiers get the phone masked (0917****567) and no address.

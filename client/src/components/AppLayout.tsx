@@ -35,7 +35,7 @@ const NAV: NavItem[] = [
   { label: 'Sales', icon: ReceiptText, to: '/sales' },
   { label: 'Products', icon: Package, to: '/products' },
   { label: 'Stock in', icon: PackagePlus, to: '/stock-in', roles: ['OWNER'] },
-  { label: 'Utang', icon: NotebookPen },
+  { label: 'Utang', icon: NotebookPen, to: '/customers' },
   { label: 'GCash & Load', icon: Smartphone },
   { label: 'Cash drawer', icon: Wallet, to: '/drawer' },
   { label: 'Expenses', icon: HandCoins, to: '/expenses', roles: ['OWNER'] },

@@ -27,7 +27,10 @@ export function AgingPage() {
   const aging = useAging();
   return (
     <div className="grid gap-6">
-      <Link to="/customers" className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground">
+      <Link
+        to="/customers"
+        className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground"
+      >
         <ArrowLeft className="size-4" aria-hidden />
         Utang
       </Link>
@@ -48,8 +51,15 @@ export function AgingPage() {
           <section aria-label="By age" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             {aging.data.buckets.map((b) => (
               <div key={b.bucket} className="rounded-2xl border bg-card p-4 shadow-sm">
-                <p className="text-sm font-semibold text-muted-foreground">{BUCKET_LABEL[b.bucket]}</p>
-                <p className={cn('mt-1 font-mono text-2xl font-bold tabular-nums', b.count > 0 && BUCKET_TONE[b.bucket])}>
+                <p className="text-sm font-semibold text-muted-foreground">
+                  {BUCKET_LABEL[b.bucket]}
+                </p>
+                <p
+                  className={cn(
+                    'mt-1 font-mono text-2xl font-bold tabular-nums',
+                    b.count > 0 && BUCKET_TONE[b.bucket],
+                  )}
+                >
                   {formatPeso(b.total)}
                 </p>
                 <p className="text-sm text-muted-foreground">
@@ -80,7 +90,9 @@ export function AgingPage() {
                         </span>
                       </span>
                     </span>
-                    <span className="shrink-0 font-mono text-lg font-bold tabular-nums">{formatPeso(c.balance)}</span>
+                    <span className="shrink-0 font-mono text-lg font-bold tabular-nums">
+                      {formatPeso(c.balance)}
+                    </span>
                   </Link>
                 </li>
               ))}

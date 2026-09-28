@@ -72,6 +72,11 @@ export function ZReport({ report: r }: { report: CashSession }) {
       <Row label={`Cash sales ${count(sales.cashCount)}`}>
         {sales.cashTotal === null ? '—' : `+${formatPeso(sales.cashTotal)}`}
       </Row>
+      {r.utangPaymentCount > 0 && (
+        <Row label={`Utang payments ${count(r.utangPaymentCount, 'payment')}`}>
+          {r.utangPayments === null ? '—' : `+${formatPeso(r.utangPayments)}`}
+        </Row>
+      )}
       {r.ewalletCash !== null && r.ewalletCash !== 0 && (
         <Row label="GCash & load (cash)">
           {r.ewalletCash > 0 ? '+' : '−'}
@@ -112,7 +117,7 @@ export function ZReport({ report: r }: { report: CashSession }) {
         </>
       )}
 
-      {(sales.gcashCount > 0 || sales.voidedCount > 0) && (
+      {(sales.gcashCount > 0 || sales.utangCount > 0 || sales.voidedCount > 0) && (
         <>
           <Hr />
           <p className="mb-1 text-[11px] tracking-[0.14em] text-muted-foreground uppercase">
@@ -121,6 +126,11 @@ export function ZReport({ report: r }: { report: CashSession }) {
           {sales.gcashCount > 0 && (
             <Row label={`GCash sales ${count(sales.gcashCount)}`}>
               {sales.gcashTotal === null ? '—' : formatPeso(sales.gcashTotal)}
+            </Row>
+          )}
+          {sales.utangCount > 0 && (
+            <Row label={`Utang sales ${count(sales.utangCount)}`}>
+              {sales.utangTotal === null ? '—' : formatPeso(sales.utangTotal)}
             </Row>
           )}
           {sales.voidedCount > 0 && (

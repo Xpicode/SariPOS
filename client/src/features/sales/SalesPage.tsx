@@ -88,6 +88,7 @@ export function SalesPage() {
                       <span className="block text-sm text-muted-foreground">
                         {formatClock(s.createdAt)} · {s.itemCount} {plural('item', s.itemCount)} ·{' '}
                         {PAYMENT_LABEL[s.paymentType]}
+                        {s.customerName && ` · ${s.customerName}`}
                         {isOwner && ` · ${s.cashierName}`}
                       </span>
                     </span>

@@ -48,7 +48,10 @@ export function CustomersPage() {
       </header>
 
       <div className="relative">
-        <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
+        <Search
+          className="pointer-events-none absolute top-1/2 left-3.5 size-4.5 -translate-y-1/2 text-muted-foreground"
+          aria-hidden
+        />
         <Input
           type="search"
           value={search}
@@ -65,13 +68,20 @@ export function CustomersPage() {
         <p role="alert">{customers.error.message}</p>
       ) : customers.data.length === 0 ? (
         <p className="rounded-2xl border border-dashed px-5 py-10 text-center text-[15px] text-muted-foreground">
-          {debounced ? `No customer matches “${debounced}”.` : 'No customers yet. Add the first one.'}
+          {debounced
+            ? `No customer matches “${debounced}”.`
+            : 'No customers yet. Add the first one.'}
         </p>
       ) : (
         <>
           {!debounced && (
-            <section aria-label="Total owed" className="flex flex-wrap items-baseline gap-x-6 gap-y-1 rounded-2xl border bg-card px-5 py-4 shadow-sm">
-              <p className="font-mono text-3xl font-bold tracking-tight tabular-nums">{formatPeso(totalOwed)}</p>
+            <section
+              aria-label="Total owed"
+              className="flex flex-wrap items-baseline gap-x-6 gap-y-1 rounded-2xl border bg-card px-5 py-4 shadow-sm"
+            >
+              <p className="font-mono text-3xl font-bold tracking-tight tabular-nums">
+                {formatPeso(totalOwed)}
+              </p>
               <p className="text-[15px] text-muted-foreground">
                 owed by {owing.length} {plural('customer', owing.length)}
               </p>
@@ -88,15 +98,25 @@ export function CustomersPage() {
                     <span className="flex flex-wrap items-center gap-2">
                       <span className="text-[15px] font-semibold">{c.name}</span>
                       {c.isBlocked && (
-                        <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-bold text-destructive">Blocked</span>
+                        <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-bold text-destructive">
+                          Blocked
+                        </span>
                       )}
                     </span>
-                    {c.phone && <span className="block font-mono text-sm text-muted-foreground">{c.phone}</span>}
+                    {c.phone && (
+                      <span className="block font-mono text-sm text-muted-foreground">
+                        {c.phone}
+                      </span>
+                    )}
                     <LimitBar c={c} className="mt-2 max-w-64" />
                   </span>
                   <span className="shrink-0 text-right">
-                    <span className="block font-mono text-lg font-bold tabular-nums">{formatPeso(c.balance)}</span>
-                    <span className="block text-xs text-muted-foreground">{c.balance < 0 ? 'store owes them' : 'owes'}</span>
+                    <span className="block font-mono text-lg font-bold tabular-nums">
+                      {formatPeso(c.balance)}
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      {c.balance < 0 ? 'store owes them' : 'owes'}
+                    </span>
                   </span>
                 </Link>
               </li>

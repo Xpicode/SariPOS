@@ -8,4 +8,8 @@ export const reminderText = (name: string, balance: number, today = new Date()) 
 
 // How much of the limit is used, 0–100, for the bar.
 export const limitUsed = (balance: number, limit: number) =>
-  limit <= 0 ? (balance > 0 ? 100 : 0) : Math.min(100, Math.max(0, Math.round((balance / limit) * 100)));
+  limit <= 0
+    ? balance > 0
+      ? 100
+      : 0
+    : Math.min(100, Math.max(0, Math.round((balance / limit) * 100)));
