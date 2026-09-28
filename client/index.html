@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SariPOS</title>
+    <script>
+      // Pick light/dark BEFORE the first paint, so dark-mode users never see a white flash.
+      // A choice saved by the toggle (src/components/ThemeToggle.tsx) wins; otherwise follow
+      // the device, live. Inline on purpose: a CSP added in Phase 10 must allow its hash.
+      (function () {
+        var media = matchMedia('(prefers-color-scheme: dark)');
+        function apply() {
+          var saved = null;
+          try {
+            saved = localStorage.getItem('theme');
+          } catch (e) {} // storage blocked (private mode): just follow the device
+          document.documentElement.dataset.theme =
+            saved === 'light' || saved === 'dark' ? saved : media.matches ? 'dark' : 'light';
+        }
+        apply();
+        media.addEventListener('change', apply);
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

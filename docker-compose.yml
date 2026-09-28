@@ -1,0 +1,16 @@
+name: saripos
+services:
+  db:
+    image: postgres:17
+    environment:
+      # Superuser: used only once, by db/init, to create the app role. The API never logs in as it.
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: change_me_admin
+    # 127.0.0.1 = reachable from this PC only, not from other devices on the Wi-Fi.
+    # 5433 because 5432 is taken by a local PostgreSQL install.
+    ports: ["127.0.0.1:5433:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro   # runs only when the volume is empty
+volumes:
+  pgdata:

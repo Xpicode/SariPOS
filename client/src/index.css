@@ -1,0 +1,252 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+/* Theme: tweakcn "twitter" (npx shadcn@latest add https://tweakcn.com/r/themes/twitter.json).
+   Colors are the theme's exact values. Two deliberate changes to the CLI output:
+   1. Dark mode is keyed on <html data-theme="dark">, set by the script in index.html
+      (saved choice from the toggle, else the device setting) instead of a `.dark` class.
+   2. Fonts are self-hosted (Open Sans via @fontsource). Menlo only exists on Macs,
+      so Geist Mono is the fallback everywhere else. */
+
+/* Tailwind's `dark:` prefix (used inside the shadcn button/input) follows the same attribute. */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+@theme inline {
+  --font-sans: 'Open Sans Variable', 'Open Sans', sans-serif;
+  --font-mono: Menlo, 'Geist Mono Variable', monospace;
+  --font-serif: Georgia, serif;
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --shadow-2xs: var(--shadow-2xs);
+  --shadow-xs: var(--shadow-xs);
+  --shadow-sm: var(--shadow-sm);
+  --shadow: var(--shadow);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-xl: var(--shadow-xl);
+  --shadow-2xl: var(--shadow-2xl);
+
+  --tracking-tighter: calc(var(--tracking-normal) - 0.05em);
+  --tracking-tight: calc(var(--tracking-normal) - 0.025em);
+  --tracking-wide: calc(var(--tracking-normal) + 0.025em);
+  --tracking-wider: calc(var(--tracking-normal) + 0.05em);
+  --tracking-widest: calc(var(--tracking-normal) + 0.1em);
+}
+
+:root {
+  --radius: 1.3rem;
+  --background: oklch(0.958 0.006 240); /* soft cool gray page, so white cards stand out */
+  --foreground: oklch(0.1884 0.0128 248.5103);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.1884 0.0128 248.5103);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.1884 0.0128 248.5103);
+  --primary: oklch(0.6723 0.1606 244.9955); /* Twitter blue */
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.1884 0.0128 248.5103);
+  --secondary-foreground: oklch(1 0 0);
+  --muted: oklch(0.94 0.006 240);
+  --muted-foreground: oklch(0.5 0.02 250); /* secondary text: ~5:1 on white, still AA */
+  --accent: oklch(0.9392 0.0166 250.8453);
+  --accent-foreground: oklch(0.6723 0.1606 244.9955);
+  --destructive: oklch(0.6188 0.2376 25.7658);
+  --destructive-foreground: oklch(1 0 0);
+  --warning: #b45309; /* not in the theme: amber for locked accounts */
+  --warning-soft: #fef3e2;
+  --border: oklch(0.885 0.012 240);
+  --input: oklch(0.9809 0.0025 228.7836);
+  --ring: oklch(0.6818 0.158 243.354);
+  --chart-1: oklch(0.6723 0.1606 244.9955);
+  --chart-2: oklch(0.6907 0.1554 160.3454);
+  --chart-3: oklch(0.8214 0.16 82.5337);
+  --chart-4: oklch(0.7064 0.1822 151.7125);
+  --chart-5: oklch(0.5919 0.2186 10.5826);
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.1884 0.0128 248.5103);
+  --sidebar-primary: oklch(0.6723 0.1606 244.9955);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.9392 0.0166 250.8453);
+  --sidebar-accent-foreground: oklch(0.6723 0.1606 244.9955);
+  --sidebar-border: oklch(0.885 0.012 240);
+  --sidebar-ring: oklch(0.6818 0.158 243.354);
+  --tracking-normal: 0em;
+  /* Soft, cool-tinted shadows (the theme shipped them all transparent), so cards lift off the page. */
+  --shadow-2xs: 0 1px 1px oklch(0.25 0.03 250 / 0.04);
+  --shadow-xs: 0 1px 2px oklch(0.25 0.03 250 / 0.06);
+  --shadow-sm: 0 1px 2px oklch(0.25 0.03 250 / 0.06), 0 2px 6px -1px oklch(0.25 0.03 250 / 0.08);
+  --shadow: var(--shadow-sm);
+  --shadow-md:
+    0 2px 4px -1px oklch(0.25 0.03 250 / 0.06), 0 6px 14px -2px oklch(0.25 0.03 250 / 0.1);
+  --shadow-lg:
+    0 4px 8px -2px oklch(0.25 0.03 250 / 0.08), 0 12px 24px -4px oklch(0.25 0.03 250 / 0.12);
+  --shadow-xl:
+    0 8px 16px -4px oklch(0.25 0.03 250 / 0.1), 0 20px 40px -8px oklch(0.25 0.03 250 / 0.16);
+  --shadow-2xl: 0 24px 56px -12px oklch(0.25 0.03 250 / 0.24);
+  --receipt-shadow: oklch(0.25 0.03 250 / 0.12);
+}
+
+/* The theme's `.dark` values ("lights out" black). */
+:root[data-theme='dark'] {
+  color-scheme: dark; /* native scrollbars, date pickers etc. go dark too */
+  --background: oklch(0 0 0);
+  --foreground: oklch(0.9328 0.0025 228.7857);
+  --card: oklch(0.2097 0.008 274.5332);
+  --card-foreground: oklch(0.8853 0 0);
+  --popover: oklch(0 0 0);
+  --popover-foreground: oklch(0.9328 0.0025 228.7857);
+  --primary: oklch(0.6692 0.1607 245.011);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.9622 0.0035 219.5331);
+  --secondary-foreground: oklch(0.1884 0.0128 248.5103);
+  --muted: oklch(0.209 0 0);
+  --muted-foreground: oklch(0.5637 0.0078 247.9662);
+  --accent: oklch(0.1928 0.0331 242.5459);
+  --accent-foreground: oklch(0.6692 0.1607 245.011);
+  --destructive: oklch(0.6188 0.2376 25.7658);
+  --destructive-foreground: oklch(1 0 0);
+  --warning: #fbbf24;
+  --warning-soft: #2e2410;
+  --border: oklch(0.2674 0.0047 248.0045);
+  --input: oklch(0.302 0.0288 244.8244);
+  --ring: oklch(0.6818 0.158 243.354);
+  --sidebar: oklch(0.2097 0.008 274.5332);
+  --sidebar-foreground: oklch(0.8853 0 0);
+  --sidebar-primary: oklch(0.6818 0.158 243.354);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.1928 0.0331 242.5459);
+  --sidebar-accent-foreground: oklch(0.6692 0.1607 245.011);
+  --sidebar-border: oklch(0.3795 0.022 240.5943);
+  --sidebar-ring: oklch(0.6818 0.158 243.354);
+  --shadow-2xs: 0 0 #0000;
+  --shadow-xs: 0 0 #0000;
+  --shadow-sm: 0 0 #0000;
+  --shadow-md: 0 0 #0000;
+  --shadow-lg: 0 0 #0000;
+  --shadow-xl: 0 0 #0000;
+  --shadow-2xl: 0 0 #0000;
+  --receipt-shadow: #0000;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    color-scheme: light; /* dark is set on :root[data-theme='dark'] above */
+  }
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+    letter-spacing: var(--tracking-normal);
+  }
+}
+
+/* ---------- Login card styled as a thermal receipt ---------- */
+
+/* Torn zigzag bottom edge. The mask keeps everything except small triangles at the bottom. */
+.receipt-edge {
+  --tooth: 18px;
+  --mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% /
+    var(--tooth) 100%;
+  -webkit-mask: var(--mask);
+  mask: var(--mask);
+  padding-bottom: calc(var(--tooth) / 2);
+}
+
+/* A hairline outline that follows the torn shape (a normal border would be cut off by the
+   mask), plus a soft lift in light mode. box-shadow would be cut off too, so: drop-shadow. */
+.receipt-outline {
+  filter: drop-shadow(0 0 0.75px var(--sidebar-border))
+    drop-shadow(0 0 0.75px var(--sidebar-border)) drop-shadow(0 6px 12px var(--receipt-shadow));
+}
+
+/* The receipt "feeds out" of the printer once, on load. */
+@keyframes receipt-print {
+  from {
+    clip-path: inset(0 0 100% 0);
+    transform: translateY(-12px);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .receipt-print {
+    animation: receipt-print 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+}
+
+/* ---------- Printing a receipt ---------- */
+
+/* <PrintableReceipt> puts a copy of the receipt in .print-only, straight under <body>.
+   On screen it's hidden; when printing, it's the ONLY thing on the page. */
+.print-only {
+  display: none;
+}
+@media print {
+  @page {
+    margin: 4mm;
+  }
+  body:has(.print-only) > :not(.print-only) {
+    display: none !important;
+  }
+  .print-only {
+    display: block;
+    width: 72mm; /* 80 mm thermal paper; an ordinary printer just prints a narrow slip */
+    /* Black ink on white paper, whatever theme is on screen. */
+    --card: #fff;
+    --card-foreground: #000;
+    --foreground: #000;
+    --muted-foreground: #000;
+    --border: #000;
+    --destructive: #000;
+    color: #000;
+  }
+  .print-only .receipt-edge {
+    -webkit-mask: none;
+    mask: none;
+  }
+}
