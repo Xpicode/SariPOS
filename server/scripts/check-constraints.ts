@@ -209,11 +209,48 @@ async function main() {
         `UPDATE ewallet_accounts SET balance = -1 WHERE id = $1`,
         [gcashId],
       ],
+      // (each e-wallet row below is valid except for the one thing named)
       [
         'cash-out without reference no',
         CHECK,
-        `INSERT INTO ewallet_transactions (idempotency_key, account_id, type, amount, wallet_change, cash_change, created_by) VALUES (gen_random_uuid(), $1, 'CASH_OUT', 50000, 50000, -49000, $2)`,
+        `INSERT INTO ewallet_transactions (idempotency_key, cash_session_id, account_id, type, amount, fee, wallet_change, cash_change, created_by) VALUES (gen_random_uuid(), $3, $1, 'CASH_OUT', 50000, 1000, 50000, -49000, $2)`,
+        [gcashId, userId, sessionId],
+      ],
+      [
+        'cash-in that puts too much in the drawer',
+        CHECK,
+        `INSERT INTO ewallet_transactions (idempotency_key, cash_session_id, account_id, type, amount, fee, wallet_change, cash_change, customer_number, reference_no, created_by) VALUES (gen_random_uuid(), $3, $1, 'CASH_IN', 50000, 1000, -50000, 510000, '09171234567', 'T-REF-1', $2)`,
+        [gcashId, userId, sessionId],
+      ],
+      [
+        'e-wallet cash outside a shift',
+        CHECK,
+        `INSERT INTO ewallet_transactions (idempotency_key, account_id, type, amount, fee, wallet_change, cash_change, customer_number, reference_no, created_by) VALUES (gen_random_uuid(), $1, 'CASH_IN', 50000, 1000, -50000, 51000, '09171234567', 'T-REF-2', $2)`,
         [gcashId, userId],
+      ],
+      [
+        'load without a network',
+        CHECK,
+        `INSERT INTO ewallet_transactions (idempotency_key, cash_session_id, account_id, type, amount, fee, wallet_change, cash_change, customer_number, created_by) VALUES (gen_random_uuid(), $3, $1, 'ELOAD', 10000, 300, -9700, 10000, '09171234567', $2)`,
+        [gcashId, userId, sessionId],
+      ],
+      [
+        'same GCash reference no twice',
+        UNIQUE,
+        `INSERT INTO ewallet_transactions (idempotency_key, cash_session_id, account_id, type, amount, fee, wallet_change, cash_change, customer_number, reference_no, created_by) VALUES (gen_random_uuid(), $3, $1, 'CASH_IN', 50000, 1000, -50000, 51000, '09171234567', 'T-DUP', $2), (gen_random_uuid(), $3, $1, 'CASH_IN', 50000, 1000, -50000, 51000, '09171234567', 'T-DUP', $2)`,
+        [gcashId, userId, sessionId],
+      ],
+      [
+        'rewrite an e-wallet transaction',
+        RAISED,
+        `UPDATE ewallet_transactions SET amount = 1 WHERE account_id = $1`,
+        [gcashId],
+      ],
+      [
+        'commission on a GCash wallet',
+        CHECK,
+        `UPDATE ewallet_accounts SET commission_bp = 300 WHERE id = $1`,
+        [gcashId],
       ],
 
       // expenses / audit

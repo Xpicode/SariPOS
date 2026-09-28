@@ -1165,15 +1165,15 @@ ORDER BY created_at, id;
 **You'll learn:** Double-entry thinking (two pockets), configurable rules, pure-function testing.
 
 **Tasks**
-- [ ] Wallet accounts page (balances + low-balance warning)
-- [ ] Fee rules editor (OWNER)
-- [ ] `computeFee()` as a **pure function** + unit tests
-- [ ] `POST /ewallet/fee-preview` so the cashier sees the fee before confirming
-- [ ] Transaction form: type → amount → auto fee → customer number → ref no. → confirm
-- [ ] Transaction updates wallet balance + records `cash_change` in **one transaction** (with row lock)
-- [ ] Block if the wallet has insufficient balance (cash-in/eload) or the drawer has insufficient cash (cash-out)
-- [ ] Top-up / withdraw wallet (OWNER)
-- [ ] E-load: telco select + load cost vs. price (commission)
+- [x] Wallet accounts page (balances + low-balance warning)
+- [x] Fee rules editor (OWNER)  _(brackets typed as "up to ₱X, fee ₱Y": no gaps or overlaps possible; audited)_
+- [x] `computeFee()` as a **pure function** + unit tests  _(`npm test` in server: node's built-in test runner)_
+- [x] `POST /ewallet/fee-preview` so the cashier sees the fee before confirming
+- [x] Transaction form: type → amount → auto fee → customer number → ref no. → confirm
+- [x] Transaction updates wallet balance + records `cash_change` in **one transaction** (with row lock)
+- [x] Block if the wallet has insufficient balance (cash-in/eload) or the drawer has insufficient cash (cash-out)
+- [x] Top-up / withdraw wallet (OWNER)  _(types TOP_UP / WITHDRAW of `POST /ewallet/transactions`, from/into the drawer or not)_
+- [x] E-load: telco select + load cost vs. price (commission)  _(commission % per load wallet, set by the owner)_
 
 **Key code**
 
@@ -1200,10 +1200,10 @@ SELECT balance FROM ewallet_accounts WHERE id = $1 FOR UPDATE;
 → `FOR UPDATE` makes other transactions **wait** until this one finishes. That prevents race conditions on balances.
 
 **Done when**
-- [ ] The Section 6.4 money-flow table matches your system for each case
-- [ ] Fee tests pass (edge amounts: ₱1, ₱500, ₱501, max)
-- [ ] Wallet can never go negative
-- [ ] GCash/e-load cash appears in the cash session
+- [x] The Section 6.4 money-flow table matches your system for each case  _(unit tests + a database CHECK)_
+- [x] Fee tests pass (edge amounts: ₱1, ₱500, ₱501, max)
+- [x] Wallet can never go negative
+- [x] GCash/e-load cash appears in the cash session
 
 ---
 
@@ -1214,13 +1214,13 @@ SELECT balance FROM ewallet_accounts WHERE id = $1 FOR UPDATE;
 **You'll learn:** Reporting SQL (`GROUP BY`, `date_trunc`, `EXTRACT`), charts.
 
 **Tasks**
-- [ ] Dashboard: today's sales, profit, # transactions, wallet balances, low stock, top utang
-- [ ] Profit report by source (products / GCash / e-load − expenses), with date range
-- [ ] Best sellers & slow movers
-- [ ] Peak hours chart
-- [ ] Sales trend (daily for 30 days)
-- [ ] Export to CSV
-- [ ] Audit log viewer (filter by user/action)
+- [x] Dashboard: today's sales, profit, # transactions, wallet balances, low stock, top utang  _(on the Overview page)_
+- [x] Profit report by source (products / GCash / e-load − expenses), with date range
+- [x] Best sellers & slow movers
+- [x] Peak hours chart
+- [x] Sales trend (daily for 30 days)
+- [x] Export to CSV  _(built in the browser; formula cells neutralized against CSV injection)_
+- [x] Audit log viewer (filter by user/action)  _(+ date range, cursor paging)_
 
 **Key code**
 
@@ -1235,9 +1235,9 @@ GROUP BY hour ORDER BY hour;
 → Store timestamps as `TIMESTAMPTZ` (UTC) and convert to `Asia/Manila` only when reporting.
 
 **Done when**
-- [ ] Profit report matches a manual computation for a test day
-- [ ] Charts render on mobile width
-- [ ] Cashier cannot open any report (403)
+- [x] Profit report matches a manual computation for a test day
+- [x] Charts render on mobile width
+- [x] Cashier cannot open any report (403)
 
 ---
 

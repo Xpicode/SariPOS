@@ -3,12 +3,14 @@ import { withTransaction } from '../../db/transaction';
 import type { Role } from '../../types/express';
 import { AppError } from '../../utils/AppError';
 import { writeAudit } from '../../utils/audit';
+import { peso } from '../../utils/money';
 import { pgError } from '../../utils/pgError';
 import { resolveRange, type DateRange } from '../../utils/dateRange';
 import { verifyOwnerPin } from '../auth/auth.service';
 import { getOpenSession } from '../cash-sessions/cash-sessions.repository';
 import { insertLedger } from '../customers/customers.repository';
 import { chargeCheck } from '../customers/customers.service';
+import { changeBalance, lockStoreGcash } from '../ewallet/ewallet.repository';
 import { changeStock } from '../inventory/inventory.repository';
 import type { CreateSaleInput, VoidSaleInput } from './sales.schema';
 import * as repo from './sales.repository';
@@ -39,7 +41,7 @@ export async function createSale(input: CreateSaleInput, userId: number) {
       if (existing) return replay(db, existing, userId);
 
       // 2. Every peso must land in a shift, or the end-of-day count can't add up.
-      const session = await getOpenSession(db, true);
+      const session = await getOpenSession(db, 'share');
       if (!session) {
         throw new AppError(409, 'NO_OPEN_SESSION', 'Open the cash drawer before selling');
       }
@@ -139,6 +141,11 @@ export async function createSale(input: CreateSaleInput, userId: number) {
           createdBy: userId,
         });
       }
+      // GCash: the money landed in the store's GCash, so its balance goes up with the sale.
+      if (input.payment.type === 'GCASH') {
+        const gcash = await lockStoreGcash(db);
+        if (gcash) await changeBalance(db, gcash.id, total);
+      }
       // Utang: the debt is a ledger row in the SAME transaction. No sale without its charge,
       // no charge without its sale (the CHECK also requires sale_id on every CHARGE).
       if (customerId) {
@@ -210,11 +217,23 @@ export async function voidSale(id: number, input: VoidSaleInput, actor: Actor, i
     }
     // A closed shift's drawer count is final. Voiding its sales now would silently make its
     // over/short wrong, so only sales of the open shift can be voided.
-    const session = await getOpenSession(db, true);
+    const session = await getOpenSession(db, 'share');
     if (session?.id !== sale.cashSessionId) {
       throw new AppError(409, 'SHIFT_CLOSED', 'Only sales from the current shift can be voided');
     }
 
+    // GCash sale: the money goes back the way it came (sent back from the store's GCash).
+    if (sale.paymentType === 'GCASH') {
+      const gcash = await lockStoreGcash(db);
+      if (gcash && gcash.balance < sale.total) {
+        throw new AppError(
+          409,
+          'NOT_ENOUGH_BALANCE',
+          `${gcash.name} only has ${peso(gcash.balance)}: not enough to send back ${peso(sale.total)}`,
+        );
+      }
+      if (gcash) await changeBalance(db, gcash.id, -sale.total);
+    }
     await repo.markVoided(db, id, actor.id, input.reason);
     for (const { productId, baseQty } of await repo.baseQtyPerProduct(db, id)) {
       await changeStock(db, {

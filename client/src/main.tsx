@@ -16,7 +16,11 @@ import { DrawerPage } from '@/features/drawer/DrawerPage';
 import { EndOfDayPage } from '@/features/drawer/EndOfDayPage';
 import { ExpensesPage } from '@/features/drawer/ExpensesPage';
 import { ShiftReportPage } from '@/features/drawer/ShiftReportPage';
+import { EwalletPage } from '@/features/ewallet/EwalletPage';
+import { FeeRulesPage } from '@/features/ewallet/FeeRulesPage';
 import { StockInPage } from '@/features/inventory/StockInPage';
+import { AuditLogPage } from '@/features/reports/AuditLogPage';
+import { ReportsPage } from '@/features/reports/ReportsPage';
 import { ProductDetailPage } from '@/features/products/ProductDetailPage';
 import { ProductFormPage } from '@/features/products/ProductFormPage';
 import { ProductsPage } from '@/features/products/ProductsPage';
@@ -24,7 +28,7 @@ import { SaleDetailPage } from '@/features/sales/SaleDetailPage';
 import { SalesPage } from '@/features/sales/SalesPage';
 import { SellPage } from '@/features/sales/SellPage';
 import { UsersPage } from '@/features/users/UsersPage';
-import { HomePage } from '@/pages/HomePage';
+import { OverviewPage } from '@/pages/OverviewPage';
 import { LoginPage } from '@/pages/LoginPage';
 
 const isClientError = (err: unknown) =>
@@ -47,7 +51,7 @@ const router = createBrowserRouter([
       {
         element: <AppLayout />,
         children: [
-          { index: true, element: <HomePage /> },
+          { index: true, element: <OverviewPage /> },
           { path: 'sell', element: <SellPage /> },
           { path: 'sales', element: <SalesPage /> },
           { path: 'sales/:id', element: <SaleDetailPage /> },
@@ -58,6 +62,10 @@ const router = createBrowserRouter([
           { path: 'customers', element: <CustomersPage /> },
           { path: 'customers/aging', element: ownerOnly(<AgingPage />) },
           { path: 'customers/:id', element: <CustomerPage /> },
+          { path: 'ewallet', element: <EwalletPage /> },
+          { path: 'ewallet/fees', element: ownerOnly(<FeeRulesPage />) },
+          { path: 'reports', element: ownerOnly(<ReportsPage />) },
+          { path: 'reports/audit', element: ownerOnly(<AuditLogPage />) },
           { path: 'products', element: <ProductsPage /> },
           { path: 'products/new', element: ownerOnly(<ProductFormPage />) },
           { path: 'products/:id', element: <ProductDetailPage /> },

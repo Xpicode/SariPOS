@@ -1,12 +1,14 @@
 import {
   ChartColumn,
   HandCoins,
-  House,
+  LayoutDashboard,
   LogOut,
   Menu,
   NotebookPen,
   Package,
   PackagePlus,
+  PanelLeftClose,
+  PanelLeftOpen,
   ReceiptText,
   ShoppingCart,
   Smartphone,
@@ -17,7 +19,7 @@ import {
 } from 'lucide-react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import { useState } from 'react';
-import { NavLink, Outlet, useMatch } from 'react-router';
+import { NavLink, Outlet } from 'react-router';
 import type { Role } from '@/api/types';
 import { useAuth } from '@/auth/context';
 import { BrandMark } from '@/components/BrandMark';
@@ -26,63 +28,63 @@ import { Button } from '@/components/ui/button';
 import { roleLabel } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 
-type NavItem = { label: string; icon: LucideIcon; to?: string; roles?: Role[] };
+type NavItem = { label: string; icon: LucideIcon; to: string; roles?: Role[] };
 
-// No `to` = module not built yet (shown, but not clickable). No `roles` = everyone.
+// No `roles` = everyone.
 const NAV: NavItem[] = [
-  { label: 'Home', icon: House, to: '/' },
+  { label: 'Overview', icon: LayoutDashboard, to: '/' },
   { label: 'Sell', icon: ShoppingCart, to: '/sell' },
   { label: 'Sales', icon: ReceiptText, to: '/sales' },
   { label: 'Products', icon: Package, to: '/products' },
   { label: 'Stock in', icon: PackagePlus, to: '/stock-in', roles: ['OWNER'] },
   { label: 'Utang', icon: NotebookPen, to: '/customers' },
-  { label: 'GCash & Load', icon: Smartphone },
+  { label: 'GCash & Load', icon: Smartphone, to: '/ewallet' },
   { label: 'Cash drawer', icon: Wallet, to: '/drawer' },
   { label: 'Expenses', icon: HandCoins, to: '/expenses', roles: ['OWNER'] },
-  { label: 'Reports', icon: ChartColumn, roles: ['OWNER'] },
+  { label: 'Reports', icon: ChartColumn, to: '/reports', roles: ['OWNER'] },
   { label: 'Users', icon: Users, to: '/users', roles: ['OWNER'] },
 ];
 
-function NavList({ role, onNavigate }: { role: Role; onNavigate?: () => void }) {
+// compact = icons only (collapsed sidebar). The label stays in the link for screen readers,
+// and shows as a tooltip on hover.
+function NavList({
+  role,
+  compact = false,
+  onNavigate,
+}: {
+  role: Role;
+  compact?: boolean;
+  onNavigate?: () => void;
+}) {
   const items = NAV.filter((i) => !i.roles || i.roles.includes(role));
   return (
     <nav aria-label="Main" className="grid gap-1">
-      {items.map(({ label, icon: Icon, to }) =>
-        to ? (
-          <NavLink
-            key={label}
-            to={to}
-            end={to === '/'} // only Home needs an exact match; /products/5 keeps Products lit
-            onClick={onNavigate}
-            className={({ isActive }) =>
-              cn(
-                'relative flex h-11 items-center gap-3 rounded-lg px-3 text-[15px] font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
-                isActive
-                  ? 'bg-accent text-accent-foreground before:absolute before:inset-y-2.5 before:left-0 before:w-[3px] before:rounded-full before:bg-primary'
-                  : 'text-foreground/80 hover:bg-muted hover:text-foreground',
-              )
-            }
-          >
-            <Icon className="size-[18px]" aria-hidden />
-            {label}
-          </NavLink>
-        ) : (
-          <span
-            key={label}
-            aria-disabled="true"
-            className="flex h-11 items-center gap-3 rounded-lg px-3 text-[15px] text-muted-foreground/70"
-          >
-            <Icon className="size-[18px]" aria-hidden />
-            {label}
-            <span className="ml-auto font-mono text-[10px] tracking-[0.14em] uppercase">Soon</span>
-          </span>
-        ),
-      )}
+      {items.map(({ label, icon: Icon, to }) => (
+        <NavLink
+          key={label}
+          to={to}
+          end={to === '/'} // only Overview needs an exact match; /products/5 keeps Products lit
+          onClick={onNavigate}
+          title={compact ? label : undefined}
+          className={({ isActive }) =>
+            cn(
+              'relative flex h-11 items-center gap-3 rounded-lg text-[15px] font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+              compact ? 'justify-center' : 'px-3',
+              isActive
+                ? 'bg-accent text-accent-foreground before:absolute before:inset-y-2.5 before:left-0 before:w-[3px] before:rounded-full before:bg-primary'
+                : 'text-foreground/80 hover:bg-muted hover:text-foreground',
+            )
+          }
+        >
+          <Icon className="size-[18px] shrink-0" aria-hidden />
+          <span className={cn(compact && 'sr-only')}>{label}</span>
+        </NavLink>
+      ))}
     </nav>
   );
 }
 
-function UserCard() {
+function UserCard({ compact = false }: { compact?: boolean }) {
   const { user, logout } = useAuth();
   if (!user) return null;
   const initials = user.fullName
@@ -92,14 +94,20 @@ function UserCard() {
     .join('');
 
   return (
-    <div className="flex items-center gap-3 rounded-xl border bg-background/60 p-2.5">
+    <div
+      className={cn(
+        'flex items-center gap-3 rounded-xl border bg-background/60 p-2.5',
+        compact && 'flex-col gap-2 p-1.5',
+      )}
+    >
       <span
         className="grid size-10 shrink-0 place-items-center rounded-full bg-accent font-mono text-sm font-medium text-accent-foreground"
+        title={compact ? `${user.fullName} (${roleLabel(user.role)})` : undefined}
         aria-hidden
       >
         {initials}
       </span>
-      <span className="min-w-0 flex-1">
+      <span className={cn('min-w-0 flex-1', compact && 'sr-only')}>
         <span className="block truncate text-sm font-medium">{user.fullName}</span>
         <span className="block font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
           {roleLabel(user.role)}
@@ -112,23 +120,70 @@ function UserCard() {
   );
 }
 
+// The collapsed/expanded choice is a per-device convenience: kept in localStorage, and if the
+// browser blocks storage the sidebar simply starts expanded.
+const SIDEBAR_KEY = 'saripos.sidebarCollapsed';
+function readCollapsed() {
+  try {
+    return localStorage.getItem(SIDEBAR_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 export function AppLayout() {
   const { user } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
-  const register = useMatch('/sell'); // the register uses the full width for its cart column
+  const [collapsed, setCollapsed] = useState(readCollapsed);
   if (!user) return null;
 
+  function toggleSidebar() {
+    setCollapsed((c) => {
+      try {
+        localStorage.setItem(SIDEBAR_KEY, c ? '0' : '1');
+      } catch {
+        // ignore: it just won't be remembered
+      }
+      return !c;
+    });
+  }
+
   return (
-    <div className="min-h-dvh md:grid md:grid-cols-[256px_1fr]">
-      {/* Tablet / desktop sidebar */}
-      <aside className="sticky top-0 hidden h-dvh flex-col gap-6 border-r bg-card px-3 py-5 md:flex">
-        <div className="flex items-center justify-between pl-2">
-          <BrandMark />
+    <div
+      className={cn(
+        'min-h-dvh md:grid md:transition-[grid-template-columns]',
+        collapsed ? 'md:grid-cols-[72px_minmax(0,1fr)]' : 'md:grid-cols-[232px_minmax(0,1fr)]',
+      )}
+    >
+      {/* Tablet / desktop sidebar: full, or a narrow icon rail to give the page more room */}
+      <aside
+        className={cn(
+          'sticky top-0 hidden h-dvh flex-col gap-5 overflow-y-auto border-r bg-card py-4 md:flex',
+          collapsed ? 'items-stretch px-2.5' : 'px-3',
+        )}
+      >
+        <div
+          className={cn('flex items-center', collapsed ? 'flex-col gap-3' : 'justify-between pl-2')}
+        >
+          <BrandMark compact={collapsed} />
           <ThemeToggle />
         </div>
-        <NavList role={user.role} />
-        <div className="mt-auto">
-          <UserCard />
+        <NavList role={user.role} compact={collapsed} />
+        <div className="mt-auto grid gap-2">
+          <Button
+            variant="ghost"
+            onClick={toggleSidebar}
+            aria-label={collapsed ? 'Expand the menu' : 'Collapse the menu'}
+            title={collapsed ? 'Expand the menu' : 'Collapse the menu'}
+            className={cn(
+              'text-muted-foreground',
+              collapsed ? 'justify-center px-0' : 'justify-start px-3',
+            )}
+          >
+            {collapsed ? <PanelLeftOpen aria-hidden /> : <PanelLeftClose aria-hidden />}
+            {!collapsed && 'Collapse menu'}
+          </Button>
+          <UserCard compact={collapsed} />
         </div>
       </aside>
 
@@ -167,8 +222,9 @@ export function AppLayout() {
         </DialogPrimitive.Portal>
       </DialogPrimitive.Root>
 
-      <main className="min-w-0 px-4 py-6 sm:px-8 sm:py-10">
-        <div className={cn('mx-auto', register ? 'max-w-7xl' : 'max-w-5xl')}>
+      {/* The page uses the whole width (up to very wide monitors, where lines would get too long). */}
+      <main className="min-w-0 px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
+        <div className="mx-auto w-full max-w-[1760px]">
           <Outlet />
         </div>
       </main>

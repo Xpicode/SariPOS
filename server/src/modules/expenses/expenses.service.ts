@@ -29,7 +29,7 @@ export async function createExpense(
     // FOR SHARE: if someone is closing the drawer right now, we wait, then see it's closed.
     let sessionId: number | null = null;
     if (input.paidFromDrawer) {
-      const session = await getOpenSession(db, true);
+      const session = await getOpenSession(db, 'share');
       if (!session) {
         throw new AppError(
           409,

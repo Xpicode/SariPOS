@@ -4,7 +4,7 @@ import { MAX_CENTAVOS } from '../products/products.schema';
 const name = z.string().trim().min(2, 'Enter the customer’s name').max(100, 'Name is too long');
 
 // Philippine mobile, stored one way: "0917 123 4567", "+63 917-123-4567" -> "09171234567".
-const phone = z
+export const phone = z
   .string()
   .trim()
   .transform((v) => v.replace(/[\s-]/g, '').replace(/^\+?63(?=9)/, '0'))

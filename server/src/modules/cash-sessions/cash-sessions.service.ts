@@ -39,6 +39,7 @@ async function buildReport(db: Db, id: number) {
     utangPayments: t.utangPayments as number | null,
     utangPaymentCount: t.utangPaymentCount,
     ewalletCash: t.ewalletCash as number | null,
+    ewalletCount: t.ewalletCount,
     drawerExpenses: t.drawerExpenses,
     expenses: await repo.listDrawerExpenses(db, id),
     // Open: live figure. Closed: the figure saved at closing time (the official record).

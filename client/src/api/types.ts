@@ -110,7 +110,8 @@ export type CashSession = {
   };
   utangPayments: number | null; // cash received for utang during the shift
   utangPaymentCount: number;
-  ewalletCash: number | null;
+  ewalletCash: number | null; // net cash from GCash / load (in − out)
+  ewalletCount: number;
   drawerExpenses: number;
   expenses: Pick<Expense, 'id' | 'category' | 'amount' | 'note' | 'createdBy' | 'createdAt'>[];
 };
@@ -211,4 +212,104 @@ export type AgingReport = {
     daysOwed: number;
     bucket: AgingBucket;
   })[];
+};
+
+export type WalletKind = 'GCASH' | 'MAYA' | 'ELOAD';
+
+// An e-wallet the store holds (the GCash app, the load retailer app). All money in centavos.
+export type Wallet = {
+  id: number;
+  name: string;
+  kind: WalletKind;
+  balance: number;
+  lowBalanceAlert: number;
+  commissionBp: number; // load only: 300 = the store keeps 3%
+  isLow: boolean;
+};
+
+export type EwalletTxnType = 'CASH_IN' | 'CASH_OUT' | 'ELOAD' | 'TOP_UP' | 'WITHDRAW';
+export type Telco = 'GLOBE' | 'TM' | 'SMART' | 'TNT' | 'DITO';
+
+// What one transaction did to the two pockets (plan 6.4). Cashiers get the number masked.
+export type EwalletTxn = {
+  id: number;
+  type: EwalletTxnType;
+  accountId: number;
+  accountName: string;
+  amount: number;
+  fee: number; // what the store earned
+  walletChange: number;
+  cashChange: number; // + into the drawer, − paid out of it
+  customerNumber: string | null;
+  referenceNo: string | null;
+  telco: Telco | null;
+  cashSessionId: number | null;
+  createdBy: string;
+  createdAt: string;
+};
+
+// The server's answer to "what would this cost?", before confirming.
+export type FeeQuote = { fee: number; walletChange: number; cashChange: number };
+
+export type FeeRule = {
+  walletKind: WalletKind;
+  txnType: 'CASH_IN' | 'CASH_OUT';
+  minAmount: number;
+  maxAmount: number;
+  fee: number;
+};
+
+// What one product sold over some store days (owner only). Active products that didn't sell
+// are included with 0: those are the slow movers.
+export type ProductSales = {
+  productId: number;
+  name: string;
+  baseUnit: string;
+  units: { unitName: string; factor: number }[];
+  stockQty: number;
+  saleCount: number; // how many receipts had it
+  qtySold: number; // in base units
+  revenue: number;
+  profit: number;
+  lastSoldAt: string | null; // ever, not only in the range
+};
+
+// Profit by source (plan 6.7). All centavos.
+export type ProfitReport = {
+  from: string;
+  to: string;
+  products: { revenue: number; cost: number; profit: number; saleCount: number };
+  gcash: { count: number; earned: number };
+  eload: { count: number; earned: number };
+  expenses: {
+    byCategory: { category: ExpenseCategory; count: number; total: number }[];
+    total: number;
+  };
+  ownerWithdrawals: number; // money taken home: not a cost, shown apart
+  netProfit: number;
+};
+
+export type TrendDay = { day: string; sales: number; profit: number; count: number };
+export type PeakHour = { hour: number; count: number; sales: number };
+
+export type Dashboard = {
+  day: string;
+  sales: number;
+  netProfit: number;
+  transactions: { sales: number; ewallet: number };
+  wallets: Wallet[];
+  topUtang: { id: number; name: string; balance: number }[];
+};
+
+export type AuditEntry = {
+  id: number;
+  createdAt: string;
+  action: string;
+  entity: string | null;
+  entityId: number | null;
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+  ip: string | null;
+  userId: number | null;
+  userName: string | null;
 };

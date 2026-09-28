@@ -62,6 +62,8 @@ function VoidDialog({ sale, onClose }: { sale: Sale; onClose: () => void }) {
           <DialogDescription>
             {formatPeso(sale.total)}. The items go back to stock. The receipt stays in the records,
             marked VOIDED.
+            {sale.paymentType === 'GCASH' &&
+              ` Send the ${formatPeso(sale.total)} back to the customer’s GCash: it comes off the store’s GCash balance.`}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} noValidate className="grid gap-5">

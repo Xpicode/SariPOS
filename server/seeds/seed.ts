@@ -342,11 +342,21 @@ async function seed() {
       );
     }
 
+    // Wallets start empty; the opening float is a TOP_UP row (from outside the drawer), so the
+    // wallet history explains every peso of the balance. Load earns 3% (₱100 of load costs ₱97).
     await db.query(
-      `INSERT INTO ewallet_accounts (name, kind, balance) VALUES
-       ('GCash (store)', 'GCASH', $1), ('Load Wallet', 'ELOAD', $2)`,
-      [c(5000), c(2000)],
+      `INSERT INTO ewallet_accounts (name, kind, commission_bp) VALUES
+       ('GCash (store)', 'GCASH', 0), ('Load Wallet', 'ELOAD', 300)`,
     );
+    await db.query(
+      `INSERT INTO ewallet_transactions
+         (idempotency_key, account_id, type, amount, wallet_change, cash_change, created_by)
+       VALUES (gen_random_uuid(), 1, 'TOP_UP', $1, $1, 0, $3),
+              (gen_random_uuid(), 2, 'TOP_UP', $2, $2, 0, $3)`,
+      [c(5000), c(2000), owner.id],
+    );
+    await db.query('UPDATE ewallet_accounts SET balance = $1 WHERE id = 1', [c(5000)]);
+    await db.query('UPDATE ewallet_accounts SET balance = $1 WHERE id = 2', [c(2000)]);
 
     // Utang customers (no debt yet: every CHARGE must come from a real sale).
     await db.query(

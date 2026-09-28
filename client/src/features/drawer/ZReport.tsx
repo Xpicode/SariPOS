@@ -77,10 +77,11 @@ export function ZReport({ report: r }: { report: CashSession }) {
           {r.utangPayments === null ? '—' : `+${formatPeso(r.utangPayments)}`}
         </Row>
       )}
-      {r.ewalletCash !== null && r.ewalletCash !== 0 && (
-        <Row label="GCash & load (cash)">
-          {r.ewalletCash > 0 ? '+' : '−'}
-          {formatPeso(Math.abs(r.ewalletCash))}
+      {r.ewalletCount > 0 && (
+        <Row label={`GCash & load, net ${count(r.ewalletCount, 'transaction')}`}>
+          {r.ewalletCash === null
+            ? '—'
+            : `${r.ewalletCash < 0 ? '−' : '+'}${formatPeso(Math.abs(r.ewalletCash))}`}
         </Row>
       )}
       {r.expenses.length > 0 && (

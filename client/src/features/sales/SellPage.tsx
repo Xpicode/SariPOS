@@ -320,7 +320,7 @@ function Register() {
         ) : (
           <ul
             aria-label="Products"
-            className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4"
+            className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
           >
             {list.data.map((p) => (
               <ProductTile

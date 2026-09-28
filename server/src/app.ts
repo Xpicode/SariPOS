@@ -8,9 +8,11 @@ import { errorHandler, notFound } from './middleware/errorHandler';
 import { authRouter } from './modules/auth/auth.routes';
 import { cashSessionsRouter } from './modules/cash-sessions/cash-sessions.routes';
 import { customersRouter } from './modules/customers/customers.routes';
+import { ewalletRouter } from './modules/ewallet/ewallet.routes';
 import { expensesRouter } from './modules/expenses/expenses.routes';
 import { inventoryRouter } from './modules/inventory/inventory.routes';
 import { categoriesRouter, productsRouter } from './modules/products/products.routes';
+import { reportsRouter } from './modules/reports/reports.routes';
 import { salesRouter } from './modules/sales/sales.routes';
 import { usersRouter } from './modules/users/users.routes';
 
@@ -36,6 +38,8 @@ app.use('/api/v1/cash-sessions', cashSessionsRouter);
 app.use('/api/v1/sales', salesRouter);
 app.use('/api/v1/expenses', expensesRouter);
 app.use('/api/v1/customers', customersRouter);
+app.use('/api/v1/ewallet', ewalletRouter);
+app.use('/api/v1/reports', reportsRouter);
 
 app.use(notFound);
 app.use(errorHandler);

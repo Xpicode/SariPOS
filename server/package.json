@@ -11,7 +11,8 @@
     "migrate:down": "node-pg-migrate down",
     "migrate:create": "node-pg-migrate create -j sql --migration-filename-format index",
     "seed": "tsx seeds/seed.ts",
-    "db:check": "tsx scripts/check-constraints.ts"
+    "db:check": "tsx scripts/check-constraints.ts",
+    "test": "tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {
     "argon2": "^0.45.1",

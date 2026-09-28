@@ -3,6 +3,7 @@ import { withTransaction } from '../../db/transaction';
 import type { Role } from '../../types/express';
 import { AppError } from '../../utils/AppError';
 import { writeAudit } from '../../utils/audit';
+import { peso } from '../../utils/money';
 import { pgError } from '../../utils/pgError';
 import { getOpenSession } from '../cash-sessions/cash-sessions.repository';
 import type { CreateCustomerInput, PaymentInput, UpdateCustomerInput } from './customers.schema';
@@ -10,8 +11,6 @@ import * as repo from './customers.repository';
 
 type Actor = { id: number; role: Role };
 
-const peso = (centavos: number) =>
-  `₱${(centavos / 100).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const notFound = () => new AppError(404, 'NOT_FOUND', 'Customer not found');
 
 // "09171234567" -> "0917****567". Done on the SERVER for cashiers: a number hidden only by the
@@ -123,7 +122,7 @@ export async function receivePayment(id: number, input: PaymentInput, actor: Act
       if (existing) return replay(db, existing, actor, id);
 
       // Cash goes into the drawer, so a shift must be open (FOR SHARE: closing waits for us).
-      const session = await getOpenSession(db, true);
+      const session = await getOpenSession(db, 'share');
       if (!session) {
         throw new AppError(
           409,

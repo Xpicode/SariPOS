@@ -4,15 +4,18 @@ import { inStoreDays } from '../../utils/dateRange';
 export type OpenSession = { id: number; openingCash: number; openedAt: Date; openedBy: string };
 
 // The store has one drawer, so at most one open session (unique index one_open_session).
-// Pass `lock` inside a sale, void or expense: FOR SHARE lets many of those run at once, but makes
-// closing the drawer (FOR UPDATE, below) wait until they commit, so nothing lands in a closed shift.
-export async function getOpenSession(db: Db, lock = false) {
+// Lock it inside a transaction that moves drawer money:
+//   'share'  (sale, void, expense, payment in): many can run at once, but closing the drawer
+//            (FOR UPDATE, below) waits until they commit, so nothing lands in a closed shift.
+//   'update' (cash paid OUT after checking there's enough): one at a time, so two payouts can't
+//            both spend the same cash. Take it directly: upgrading SHARE -> UPDATE can deadlock.
+export async function getOpenSession(db: Db, lock: false | 'share' | 'update' = false) {
   const { rows } = await db.query<OpenSession>(
     `SELECT s.id, s.opening_cash AS "openingCash", s.opened_at AS "openedAt",
             u.full_name AS "openedBy"
      FROM cash_sessions s JOIN users u ON u.id = s.opened_by
      WHERE s.closed_at IS NULL
-     ${lock ? 'FOR SHARE OF s' : ''}`,
+     ${lock === 'share' ? 'FOR SHARE OF s' : lock === 'update' ? 'FOR UPDATE OF s' : ''}`,
   );
   return rows[0] ?? null;
 }
@@ -79,6 +82,7 @@ export async function getTotals(db: Db, id: number) {
     utangPayments: number;
     utangPaymentCount: number;
     ewalletCash: number;
+    ewalletCount: number;
     drawerExpenses: number;
   }>(
     `SELECT
@@ -96,6 +100,8 @@ export async function getTotals(db: Db, id: number) {
         WHERE cash_session_id = $1 AND type = 'PAYMENT')                                              AS "utangPaymentCount",
        (SELECT COALESCE(SUM(cash_change), 0)::bigint FROM ewallet_transactions
         WHERE cash_session_id = $1 AND status = 'COMPLETED')                                          AS "ewalletCash",
+       (SELECT COUNT(*) FROM ewallet_transactions
+        WHERE cash_session_id = $1 AND status = 'COMPLETED')                                          AS "ewalletCount",
        (SELECT COALESCE(SUM(amount), 0)::bigint FROM expenses
         WHERE cash_session_id = $1 AND paid_from_drawer)                                              AS "drawerExpenses"
      FROM sales WHERE cash_session_id = $1`,

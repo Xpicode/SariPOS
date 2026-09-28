@@ -16,12 +16,11 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { fieldAria } from '@/lib/aria';
+import { MOBILE_RE } from '@/lib/ewallet';
 import { centavosToInput, formatPeso, parsePeso } from '@/lib/money';
 import { reminderText } from '@/lib/utang';
 import { newUuid } from '@/lib/uuid';
 import { useAfterCustomerChange } from './queries';
-
-const PHONE_RE = /^(09|\+?639)\d{9}$/; // same rule as the server, before it normalizes
 
 function Footer({
   pending,
@@ -70,7 +69,7 @@ export function CustomerFormDialog({
   const errors = {
     name: name.trim().length < 2 ? 'Enter the customer’s name' : undefined,
     phone:
-      cleanPhone && !PHONE_RE.test(cleanPhone)
+      cleanPhone && !MOBILE_RE.test(cleanPhone)
         ? 'Use a mobile number like 0917 123 4567'
         : undefined,
     limit: isOwner && limit === null ? 'Enter the limit, like 500' : undefined,
