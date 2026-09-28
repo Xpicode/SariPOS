@@ -16,9 +16,10 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { fieldAria } from '@/lib/aria';
-import { MOBILE_RE } from '@/lib/ewallet';
+import { MOBILE_RE, parseBp } from '@/lib/ewallet';
 import { centavosToInput, formatPeso, parsePeso } from '@/lib/money';
-import { reminderText } from '@/lib/utang';
+import { formatDate, todayInManila } from '@/lib/time';
+import { interestPreview, percentLabel, reminderText } from '@/lib/utang';
 import { newUuid } from '@/lib/uuid';
 import { useAfterCustomerChange } from './queries';
 
@@ -43,7 +44,8 @@ function Footer({
   );
 }
 
-// Add a customer (anyone) or edit one (owner: limit, block, contact details).
+// Add a customer (anyone) or edit one. Owner: everything. Cashier: only the payment terms
+// (due date and interest), the one thing they may change on an existing customer.
 export function CustomerFormDialog({
   customer,
   onClose,
@@ -62,17 +64,32 @@ export function CustomerFormDialog({
   const [address, setAddress] = useState(customer?.address ?? '');
   const [limitText, setLimitText] = useState(centavosToInput(customer?.creditLimit ?? 50000));
   const [blocked, setBlocked] = useState(customer?.isBlocked ?? false);
+  const [dueDate, setDueDate] = useState(customer?.dueDate ?? '');
+  const [interestText, setInterestText] = useState(
+    customer?.interestBp ? percentLabel(customer.interestBp).replace('%', '') : '',
+  );
   const [showErrors, setShowErrors] = useState(false);
+  const termsOnly = editing && !isOwner;
+  const today = todayInManila();
 
   const cleanPhone = phone.replace(/[\s-]/g, '');
   const limit = parsePeso(limitText);
+  const interestBp = interestText.trim() ? parseBp(interestText) : 0;
+  const dueChanged = dueDate !== (customer?.dueDate ?? '');
   const errors = {
-    name: name.trim().length < 2 ? 'Enter the customer’s name' : undefined,
+    name: !termsOnly && name.trim().length < 2 ? 'Enter the customer’s name' : undefined,
     phone:
-      cleanPhone && !MOBILE_RE.test(cleanPhone)
+      !termsOnly && cleanPhone && !MOBILE_RE.test(cleanPhone)
         ? 'Use a mobile number like 0917 123 4567'
         : undefined,
     limit: isOwner && limit === null ? 'Enter the limit, like 500' : undefined,
+    // A date already past is refused (the server checks too); an unchanged old date is kept.
+    dueDate: dueDate && dueChanged && dueDate < today ? 'Pick today or a later date' : undefined,
+    interest: interestBp === null ? 'Enter a percent from 0 to 50, like 5' : undefined,
+  };
+  const terms = {
+    ...((!editing || dueChanged) && { dueDate: dueDate || (editing ? null : undefined) }),
+    interestBp: interestBp ?? 0,
   };
 
   const save = useMutation({
@@ -80,13 +97,16 @@ export function CustomerFormDialog({
       editing
         ? api<{ customer: Customer }>(`/customers/${customer!.id}`, {
             method: 'PATCH',
-            body: {
-              name: name.trim(),
-              phone: cleanPhone || null,
-              address: address.trim() || null,
-              creditLimit: limit,
-              isBlocked: blocked,
-            },
+            body: termsOnly
+              ? terms
+              : {
+                  name: name.trim(),
+                  phone: cleanPhone || null,
+                  address: address.trim() || null,
+                  creditLimit: limit,
+                  isBlocked: blocked,
+                  ...terms,
+                },
           })
         : api<{ customer: Customer }>('/customers', {
             method: 'POST',
@@ -95,6 +115,7 @@ export function CustomerFormDialog({
               phone: cleanPhone || undefined,
               address: address.trim() || undefined,
               ...(isOwner && { creditLimit: limit }), // cashiers get the default ₱500
+              ...terms,
             },
           }),
     onSuccess: ({ customer: saved }) => {
@@ -115,45 +136,90 @@ export function CustomerFormDialog({
     <Dialog open onOpenChange={(open) => !open && !save.isPending && onClose()}>
       <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{editing ? `Edit ${customer!.name}` : 'Add customer'}</DialogTitle>
+          <DialogTitle>
+            {termsOnly
+              ? `Payment terms for ${customer!.name}`
+              : editing
+                ? `Edit ${customer!.name}`
+                : 'Add customer'}
+          </DialogTitle>
           <DialogDescription>
-            {isOwner
-              ? 'Who may take items on utang, and up to how much.'
-              : 'New customers start with a ₱500 limit. The owner can change it.'}
+            {termsOnly
+              ? 'When they promised to pay, and the interest if they’re late.'
+              : isOwner
+                ? 'Who may take items on utang, up to how much, and when they pay.'
+                : 'New customers start with a ₱500 limit. The owner can change it.'}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} noValidate className="grid gap-5">
-          <FormField id="c-name" label="Name" error={err('name')}>
-            <Input
-              id="c-name"
-              autoFocus
-              maxLength={100}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Aling Nena"
-              {...fieldAria('c-name', err('name'))}
-            />
-          </FormField>
-          <FormField id="c-phone" label="Mobile number (optional)" error={err('phone')}>
-            <Input
-              id="c-phone"
-              inputMode="tel"
-              autoComplete="off"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="0917 123 4567"
-              {...fieldAria('c-phone', err('phone'))}
-            />
-          </FormField>
-          <FormField id="c-address" label="Address (optional)">
-            <Input
-              id="c-address"
-              maxLength={255}
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="Purok 2, tabi ng simbahan"
-            />
-          </FormField>
+          {!termsOnly && (
+            <>
+              <FormField id="c-name" label="Name" error={err('name')}>
+                <Input
+                  id="c-name"
+                  autoFocus
+                  maxLength={100}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Aling Nena"
+                  {...fieldAria('c-name', err('name'))}
+                />
+              </FormField>
+              <FormField id="c-phone" label="Mobile number (optional)" error={err('phone')}>
+                <Input
+                  id="c-phone"
+                  inputMode="tel"
+                  autoComplete="off"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="0917 123 4567"
+                  {...fieldAria('c-phone', err('phone'))}
+                />
+              </FormField>
+              <FormField id="c-address" label="Address (optional)">
+                <Input
+                  id="c-address"
+                  maxLength={255}
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="Purok 2, tabi ng simbahan"
+                />
+              </FormField>
+            </>
+          )}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField
+              id="c-due"
+              label="Pay by (optional)"
+              error={err('dueDate')}
+              hint="The date they promised to pay."
+            >
+              <Input
+                id="c-due"
+                type="date"
+                min={today}
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                {...fieldAria('c-due', err('dueDate'), true)}
+              />
+            </FormField>
+            <FormField
+              id="c-interest"
+              label="Interest if late (%)"
+              error={err('interest')}
+              hint="Of what they owe. Blank = none."
+            >
+              <Input
+                id="c-interest"
+                inputMode="decimal"
+                autoComplete="off"
+                value={interestText}
+                onChange={(e) => setInterestText(e.target.value)}
+                placeholder="e.g. 5"
+                {...fieldAria('c-interest', err('interest'), true)}
+              />
+            </FormField>
+          </div>
           {isOwner && (
             <FormField
               id="c-limit"
@@ -192,7 +258,7 @@ export function CustomerFormDialog({
           )}
           <Footer
             pending={save.isPending}
-            label={editing ? 'Save changes' : 'Add customer'}
+            label={termsOnly ? 'Save terms' : editing ? 'Save changes' : 'Add customer'}
             onCancel={onClose}
           />
         </form>
@@ -304,6 +370,70 @@ export function ReminderDialog({ customer, onClose }: { customer: Customer; onCl
           {copied ? <Check aria-hidden /> : <Copy aria-hidden />}
           {copied ? 'Copied' : 'Copy message'}
         </Button>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Owner only: add the agreed interest once the due date has passed. Shows exactly what will be
+// added before anything is saved; the server recomputes it (and refuses a second one).
+export function AddInterestDialog({
+  customer,
+  onClose,
+}: {
+  customer: Customer;
+  onClose: () => void;
+}) {
+  const afterChange = useAfterCustomerChange();
+  const amount = interestPreview(customer.balance, customer.interestBp);
+  const add = useMutation({
+    mutationFn: () =>
+      api<{ customer: Customer }>(`/customers/${customer.id}/interest`, { method: 'POST' }),
+    onSuccess: () => {
+      afterChange();
+      onClose();
+    },
+  });
+  return (
+    <Dialog open onOpenChange={(open) => !open && !add.isPending && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Add interest?</DialogTitle>
+          <DialogDescription>
+            {customer.name} was due {customer.dueDate && formatDate(customer.dueDate)}. This adds{' '}
+            {percentLabel(customer.interestBp)} of what they owe to their utang, once for this due
+            date.
+          </DialogDescription>
+        </DialogHeader>
+        <dl className="grid gap-1 rounded-2xl bg-muted/70 px-5 py-4 text-[15px]">
+          <div className="flex justify-between gap-4">
+            <dt className="text-muted-foreground">Owes now</dt>
+            <dd className="font-mono tabular-nums">{formatPeso(customer.balance)}</dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt className="text-muted-foreground">
+              Interest ({percentLabel(customer.interestBp)})
+            </dt>
+            <dd className="font-mono tabular-nums">+{formatPeso(amount)}</dd>
+          </div>
+          <div className="flex justify-between gap-4 font-semibold">
+            <dt>Will owe</dt>
+            <dd className="font-mono tabular-nums">{formatPeso(customer.balance + amount)}</dd>
+          </div>
+        </dl>
+        {add.isError && (
+          <p role="alert" className="text-[15px] font-medium text-destructive">
+            {add.error.message}
+          </p>
+        )}
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button variant="outline" onClick={onClose} disabled={add.isPending}>
+            Cancel
+          </Button>
+          <Button onClick={() => add.mutate()} disabled={add.isPending || amount <= 0}>
+            {add.isPending ? 'Adding…' : `Add ${formatPeso(amount)} interest`}
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );

@@ -332,3 +332,96 @@ describe('GCash form: fee paid by GCash, owner-only fee, customer name', () => {
     );
   });
 });
+
+describe('utang terms: due date and interest', () => {
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
+  const day = (offset: number) =>
+    new Date(Date.parse(`${today}T12:00:00+08:00`) + offset * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+  let id: number;
+
+  test('a cashier adds a customer with a due date and 5% interest', async () => {
+    const r = await api.call('POST', '/customers', {
+      token: cashier,
+      body: { name: 'Ate Lorna', dueDate: day(7), interestBp: 500 },
+    });
+    assert.equal(r.status, 201, JSON.stringify(r.body));
+    id = r.body.data.customer.id;
+    assert.deepEqual(
+      [r.body.data.customer.dueDate, r.body.data.customer.interestBp, r.body.data.customer.pastDue],
+      [day(7), 500, false],
+    );
+  });
+
+  test('a due date already past is refused', async () => {
+    const r = await api.call('PATCH', `/customers/${id}`, {
+      token: cashier,
+      body: { dueDate: day(-1) },
+    });
+    assert.equal(r.status, 400);
+    assert.equal(r.body.error.code, 'DUE_DATE_PASSED');
+  });
+
+  test('a cashier can change the terms, but not the limit', async () => {
+    const ok = await api.call('PATCH', `/customers/${id}`, {
+      token: cashier,
+      body: { interestBp: 300 },
+    });
+    assert.equal(ok.status, 200, JSON.stringify(ok.body));
+    const no = await api.call('PATCH', `/customers/${id}`, {
+      token: cashier,
+      body: { creditLimit: 99_999_999 },
+    });
+    assert.equal(no.status, 403);
+  });
+
+  test('not late yet: interest is refused', async () => {
+    const r = await api.call('POST', `/customers/${id}/interest`, { token: owner });
+    assert.equal(r.body.error?.code, 'NOT_OVERDUE');
+  });
+
+  test('late (due date moved into the past by hand): owner adds 3% once, cashier cannot', async () => {
+    // She owes ₱450 (a charge from a real sale), and her due date was yesterday.
+    const { rows } = await pool.query("SELECT id FROM sales WHERE payment_type = 'UTANG' LIMIT 1");
+    await pool.query(
+      `INSERT INTO credit_ledger (customer_id, type, amount, sale_id, created_by)
+       VALUES ($1, 'CHARGE', 45000, $2, 1)`,
+      [id, rows[0].id],
+    );
+    await pool.query('UPDATE customers SET due_date = $2 WHERE id = $1', [id, day(-1)]);
+
+    const listed = await api.call('GET', `/customers/${id}/ledger`, { token: cashier });
+    assert.equal(listed.body.data.customer.pastDue, true, 'shown as overdue');
+
+    assert.equal(
+      (await api.call('POST', `/customers/${id}/interest`, { token: cashier })).status,
+      403,
+    );
+
+    const r = await api.call('POST', `/customers/${id}/interest`, { token: owner });
+    assert.equal(r.status, 201, JSON.stringify(r.body));
+    assert.equal(r.body.data.customer.balance, 45_000 + 1_350); // 3% of ₱450 = ₱13.50
+    assert.equal(r.body.data.customer.interestCharged, true);
+
+    const again = await api.call('POST', `/customers/${id}/interest`, { token: owner });
+    assert.equal(again.body.error?.code, 'INTEREST_ALREADY_ADDED');
+
+    const audit = await pool.query(
+      "SELECT after_data FROM audit_logs WHERE action = 'UTANG_INTEREST_ADDED' AND entity_id = $1",
+      [id],
+    );
+    assert.equal(audit.rows[0].after_data.interest, 1_350);
+  });
+
+  test('a new due date means interest can be charged again later (for that date)', async () => {
+    const r = await api.call('PATCH', `/customers/${id}`, {
+      token: owner,
+      body: { dueDate: day(14) },
+    });
+    assert.deepEqual(
+      [r.body.data.customer.pastDue, r.body.data.customer.interestCharged],
+      [false, false],
+    );
+  });
+});

@@ -11,6 +11,14 @@ export const phone = z
   .pipe(z.string().regex(/^09\d{9}$/, 'Use a mobile number like 0917 123 4567'));
 
 const address = z.string().trim().max(255, 'Address is too long');
+// Utang terms. The due date is a store day (YYYY-MM-DD); the service refuses one already past.
+const dueDate = z.iso.date('Pick a date');
+// Interest if late, in basis points (500 = 5.00%). At most 50%.
+const interestBp = z
+  .number()
+  .int()
+  .min(0, 'The interest can’t be negative')
+  .max(5000, 'At most 50%');
 const creditLimit = z
   .number()
   .int()
@@ -22,6 +30,8 @@ export const createCustomerSchema = z.object({
   phone: phone.optional(),
   address: address.optional(),
   creditLimit: creditLimit.optional(), // owner only (checked in the service); default ₱500
+  dueDate: dueDate.optional(),
+  interestBp: interestBp.optional(),
 });
 
 export const updateCustomerSchema = z
@@ -31,6 +41,8 @@ export const updateCustomerSchema = z
     address: address.nullable().optional(),
     creditLimit: creditLimit.optional(),
     isBlocked: z.boolean().optional(),
+    dueDate: dueDate.nullable().optional(), // null = no date agreed
+    interestBp: interestBp.optional(),
   })
   .refine((o) => Object.values(o).some((v) => v !== undefined), 'Nothing to update');
 

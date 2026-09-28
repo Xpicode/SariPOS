@@ -4,6 +4,8 @@ import type { Customer } from '@/api/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { formatPeso } from '@/lib/money';
+import { formatDate } from '@/lib/time';
+import { isOverdue } from '@/lib/utang';
 import { useDebounced } from '@/lib/useDebounced';
 import { cn } from '@/lib/utils';
 import { useCustomers } from './queries';
@@ -42,6 +44,11 @@ export function CustomerPicker({
             </strong>{' '}
             of {formatPeso(selected.creditLimit)}
           </p>
+          {isOverdue(selected) && selected.dueDate && (
+            <p className="mt-1 text-sm font-semibold text-destructive">
+              Overdue: was due {formatDate(selected.dueDate)}. Remind them before adding more.
+            </p>
+          )}
         </div>
         <Button type="button" variant="ghost" size="sm" onClick={() => onSelect(null)}>
           Change
@@ -106,6 +113,9 @@ export function CustomerPicker({
                     >
                       {reason ??
                         `Owes ${formatPeso(c.balance)} · limit ${formatPeso(c.creditLimit)}`}
+                      {!reason && isOverdue(c) && (
+                        <span className="font-semibold text-destructive"> · Overdue</span>
+                      )}
                     </span>
                   </span>
                 </button>

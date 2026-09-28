@@ -4,7 +4,8 @@ import type { Role } from '../../types/express';
 import { AppError } from '../../utils/AppError';
 import { writeAudit } from '../../utils/audit';
 import { peso } from '../../utils/money';
-import { pgError } from '../../utils/pgError';
+import { pgError, UNIQUE_VIOLATION } from '../../utils/pgError';
+import { todayInManila } from '../../utils/time';
 import { getOpenSession } from '../cash-sessions/cash-sessions.repository';
 import type { CreateCustomerInput, PaymentInput, UpdateCustomerInput } from './customers.schema';
 import * as repo from './customers.repository';
@@ -12,6 +13,25 @@ import * as repo from './customers.repository';
 type Actor = { id: number; role: Role };
 
 const notFound = () => new AppError(404, 'NOT_FOUND', 'Customer not found');
+
+// Interest on what they owe, in basis points (500 = 5%). Rounded DOWN to the centavo: the store
+// never charges more than the agreed rate.
+export const interestAmount = (balance: number, bp: number) =>
+  Math.max(0, Math.floor((balance * bp) / 10_000));
+
+// A due date must be today or later: a date already past would make them overdue on day one.
+function checkDueDate(dueDate: string | null | undefined) {
+  if (dueDate && dueDate < todayInManila()) {
+    throw new AppError(
+      400,
+      'DUE_DATE_PASSED',
+      'That date has already passed. Pick today or later.',
+    );
+  }
+}
+
+// What a cashier may change on an existing customer: only the terms (when to pay, interest).
+const CASHIER_FIELDS = new Set(['dueDate', 'interestBp']);
 
 // "09171234567" -> "0917****567". Done on the SERVER for cashiers: a number hidden only by the
 // screen would still be in the response for anyone who opens the browser's network tab.
@@ -51,6 +71,7 @@ export async function createCustomer(input: CreateCustomerInput, actor: Actor, i
   if (input.creditLimit !== undefined && actor.role !== 'OWNER') {
     throw new AppError(403, 'FORBIDDEN', 'Only the owner can set a credit limit');
   }
+  checkDueDate(input.dueDate);
   return withTransaction(async (db) => {
     const id = await repo.insertCustomer(db, input);
     const c = (await repo.getCustomer(db, id))!;
@@ -59,7 +80,12 @@ export async function createCustomer(input: CreateCustomerInput, actor: Actor, i
       action: 'CUSTOMER_CREATED',
       entity: 'customer',
       entityId: id,
-      after: { name: c.name, creditLimit: c.creditLimit },
+      after: {
+        name: c.name,
+        creditLimit: c.creditLimit,
+        dueDate: c.dueDate,
+        interestBp: c.interestBp,
+      },
       ip,
     });
     return forRole(c, actor.role);
@@ -69,25 +95,43 @@ export async function createCustomer(input: CreateCustomerInput, actor: Actor, i
 export async function updateCustomer(
   id: number,
   input: UpdateCustomerInput,
-  actorId: number,
+  actor: Actor,
   ip?: string,
 ) {
+  const others = Object.entries(input).filter(
+    ([k, v]) => v !== undefined && !CASHIER_FIELDS.has(k),
+  );
+  if (actor.role !== 'OWNER' && others.length > 0) {
+    throw new AppError(
+      403,
+      'FORBIDDEN',
+      'Only the owner can change the name, phone, limit or block',
+    );
+  }
+  checkDueDate(input.dueDate);
   return withTransaction(async (db) => {
     const before = await repo.lockCustomer(db, id);
     if (!before) throw notFound();
     await repo.updateCustomer(db, id, input);
     const after = (await repo.getCustomer(db, id))!;
-    // Limit and block decide who may borrow: every change is traceable (plan 8.2 A09).
+    // Limit, block and terms decide who may borrow and what they pay: every change is traceable
+    // (plan 8.2 A09).
+    const terms = (c: repo.CustomerView) => ({
+      creditLimit: c.creditLimit,
+      isBlocked: c.isBlocked,
+      dueDate: c.dueDate,
+      interestBp: c.interestBp,
+    });
     await writeAudit(db, {
-      userId: actorId,
+      userId: actor.id,
       action: 'CUSTOMER_UPDATED',
       entity: 'customer',
       entityId: id,
-      before: { creditLimit: before.creditLimit, isBlocked: before.isBlocked },
-      after: { creditLimit: after.creditLimit, isBlocked: after.isBlocked },
+      before: terms(before),
+      after: terms(after),
       ip,
     });
-    return after;
+    return forRole(after, actor.role);
   });
 }
 
@@ -178,4 +222,54 @@ export async function agingReport() {
     return { bucket: key, count: list.length, total: list.reduce((s, c) => s + c.balance, 0) };
   });
   return { buckets, customers };
+}
+
+// Owner only (plan: the owner confirms, nothing is charged automatically). Once the due date has
+// passed, add the agreed interest on what they owe now, as an INTEREST row in the ledger.
+// One per due date: the database's unique index refuses a second one, even from two owners at once.
+export async function addInterest(id: number, actor: Actor, ip?: string) {
+  try {
+    return await withTransaction(async (db) => {
+      const c = await repo.lockCustomer(db, id);
+      if (!c) throw notFound();
+      const refuse = (code: string, message: string) => new AppError(409, code, message);
+      if (!c.dueDate) throw refuse('NO_DUE_DATE', `${c.name} has no due date`);
+      if (!c.pastDue) throw refuse('NOT_OVERDUE', `Not late yet: due ${c.dueDate}`);
+      if (c.interestBp === 0) throw refuse('NO_INTEREST_RATE', `${c.name} has no interest set`);
+      if (c.interestCharged) {
+        throw refuse('INTEREST_ALREADY_ADDED', 'Interest for this due date is already added');
+      }
+      const amount = interestAmount(c.balance, c.interestBp);
+      if (amount <= 0) throw refuse('NOTHING_OWED', `${c.name} owes nothing to charge interest on`);
+
+      const pct = (c.interestBp / 100).toFixed(2).replace(/\.?0+$/, '');
+      const entryId = await repo.insertLedger(db, {
+        customerId: id,
+        type: 'INTEREST',
+        amount,
+        interestFor: c.dueDate,
+        note: `Interest ${pct}% of ${peso(c.balance)} (was due ${c.dueDate})`,
+        createdBy: actor.id,
+      });
+      await writeAudit(db, {
+        userId: actor.id,
+        action: 'UTANG_INTEREST_ADDED',
+        entity: 'customer',
+        entityId: id,
+        before: { balance: c.balance },
+        after: { interest: amount, rateBp: c.interestBp, dueDate: c.dueDate, ledgerId: entryId },
+        ip,
+      });
+      return forRole((await repo.getCustomer(db, id))!, actor.role);
+    });
+  } catch (err) {
+    if (pgError(err).code === UNIQUE_VIOLATION) {
+      throw new AppError(
+        409,
+        'INTEREST_ALREADY_ADDED',
+        'Interest for this due date is already added',
+      );
+    }
+    throw err;
+  }
 }

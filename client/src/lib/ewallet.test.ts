@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { breakdown, formatBp, formatMobile, parseBp } from './ewallet';
+import { breakdown, formatBp, formatMobile, mobileDigits, parseBp } from './ewallet';
 
 describe('formatMobile', () => {
   it('groups a full number', () => expect(formatMobile('09171234567')).toBe('0917 123 4567'));
@@ -34,4 +34,12 @@ describe('breakdown', () => {
     expect(r.totalFee).toBe(3_300);
   });
   it('nothing yet: no rows, ₱0', () => expect(breakdown([])).toEqual({ rows: [], totalFee: 0 }));
+});
+
+describe('mobileDigits', () => {
+  it('keeps digits only', () => expect(mobileDigits('0917-123 4567')).toBe('09171234567'));
+  it('stops at 11 digits', () => expect(mobileDigits('0917123456789')).toBe('09171234567'));
+  it('turns a pasted +63 number into 09…', () =>
+    expect(mobileDigits('+63 917 123 4567')).toBe('09171234567'));
+  it('ignores letters', () => expect(mobileDigits('09a17')).toBe('0917'));
 });

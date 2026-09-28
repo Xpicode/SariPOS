@@ -160,6 +160,30 @@ async function main() {
 
       // utang
       [
+        'interest without saying which due date it is for',
+        CHECK,
+        `INSERT INTO credit_ledger (customer_id, type, amount, created_by) VALUES ($1, 'INTEREST', 500, $2)`,
+        [customerId, userId],
+      ],
+      [
+        'negative interest (lowers the debt)',
+        CHECK,
+        `INSERT INTO credit_ledger (customer_id, type, amount, interest_for, created_by) VALUES ($1, 'INTEREST', -500, '2026-01-15', $2)`,
+        [customerId, userId],
+      ],
+      [
+        'interest twice for the same due date',
+        UNIQUE,
+        `INSERT INTO credit_ledger (customer_id, type, amount, interest_for, created_by) VALUES ($1, 'INTEREST', 500, '2026-01-15', $2), ($1, 'INTEREST', 500, '2026-01-15', $2)`,
+        [customerId, userId],
+      ],
+      [
+        'interest rate over 50%',
+        CHECK,
+        `UPDATE customers SET interest_bp = 5001 WHERE id = $1`,
+        [customerId],
+      ],
+      [
         'positive PAYMENT (increases debt)',
         CHECK,
         `INSERT INTO credit_ledger (customer_id, type, amount, created_by) VALUES ($1, 'PAYMENT', 500, $2)`,

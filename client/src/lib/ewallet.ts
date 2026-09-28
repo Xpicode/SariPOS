@@ -56,3 +56,11 @@ export function breakdown(txns: { type: EwalletTxnType; amount: number; fee: num
   }).filter((r) => r.count > 0);
   return { rows, totalFee: rows.reduce((s, r) => s + r.fee, 0) };
 }
+
+// The mobile number box: digits only, at most 11 (09171234567). A pasted "+63 917 123 4567" or
+// "0917-123-4567" becomes 09171234567, so the cashier never has to fix it by hand.
+export const mobileDigits = (raw: string) =>
+  raw
+    .replace(/\D/g, '')
+    .replace(/^63(?=9)/, '0')
+    .slice(0, 11);

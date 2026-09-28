@@ -187,13 +187,17 @@ export type Customer = {
   creditLimit: number;
   isBlocked: boolean;
   balance: number; // owed now; negative = the store owes them
+  dueDate: string | null; // "2026-10-15": the day they promised to pay
+  interestBp: number; // interest if late: 500 = 5% of what they owe
+  pastDue: boolean; // the due date is before today (store time)
+  interestCharged: boolean; // interest for this due date is already on the ledger
   createdAt: string;
 };
 
 // One line of the statement, with the balance right after it (like a passbook).
 export type LedgerEntry = {
   id: number;
-  type: 'CHARGE' | 'PAYMENT' | 'ADJUSTMENT';
+  type: 'CHARGE' | 'PAYMENT' | 'ADJUSTMENT' | 'INTEREST';
   amount: number;
   note: string | null;
   createdAt: string;

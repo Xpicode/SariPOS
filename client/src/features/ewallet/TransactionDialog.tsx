@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { fieldAria } from '@/lib/aria';
-import { MOBILE_RE, REF_RE, TELCOS } from '@/lib/ewallet';
+import { MOBILE_RE, mobileDigits, REF_RE, TELCOS } from '@/lib/ewallet';
 import { centavosToInput, formatPeso, formatPesoShort, parsePeso } from '@/lib/money';
 import { useDebounced } from '@/lib/useDebounced';
 import { newUuid } from '@/lib/uuid';
@@ -172,7 +172,7 @@ export function TransactionDialog({
     setFeeText(null); // another type has other fee rules
   }
 
-  const cleanNumber = number.replace(/[\s-]/g, '');
+  const cleanNumber = number; // already digits only (mobileDigits)
   const cleanRef = ref.replace(/\s+/g, '');
   const needsNumber = type === 'CASH_IN' || type === 'ELOAD';
   const needsRef = type === 'CASH_IN' || type === 'CASH_OUT';
@@ -183,7 +183,7 @@ export function TransactionDialog({
       needsNumber && !cleanNumber
         ? 'Enter the mobile number'
         : cleanNumber && !MOBILE_RE.test(cleanNumber)
-          ? 'Use a mobile number like 0917 123 4567'
+          ? 'Use 11 digits starting with 09, like 09171234567'
           : undefined,
     ref:
       (needsRef && !cleanRef) || (cleanRef && !REF_RE.test(cleanRef))
@@ -413,11 +413,12 @@ export function TransactionDialog({
               >
                 <Input
                   id="ew-number"
-                  inputMode="tel"
+                  inputMode="numeric"
                   autoComplete="off"
+                  maxLength={11}
                   value={number}
-                  onChange={(e) => setNumber(e.target.value)}
-                  placeholder="0917 123 4567"
+                  onChange={(e) => setNumber(mobileDigits(e.target.value))}
+                  placeholder="09171234567"
                   className="h-12 font-mono tracking-wide"
                   {...fieldAria('ew-number', err('number'))}
                 />

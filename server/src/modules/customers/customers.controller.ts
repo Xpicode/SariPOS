@@ -22,10 +22,15 @@ export const update: RequestHandler = async (req, res) => {
   const customer = await service.updateCustomer(
     parseId(req.params.id),
     req.body as UpdateCustomerInput,
-    req.user!.id,
+    req.user!,
     req.ip,
   );
   res.json({ data: { customer } });
+};
+
+export const addInterest: RequestHandler = async (req, res) => {
+  const customer = await service.addInterest(parseId(req.params.id), req.user!, req.ip);
+  res.status(201).json({ data: { customer } });
 };
 
 export const ledger: RequestHandler = async (req, res) => {

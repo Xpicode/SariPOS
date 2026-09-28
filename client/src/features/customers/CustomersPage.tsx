@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { formatPeso } from '@/lib/money';
 import { plural } from '@/lib/stock';
+import { formatDate } from '@/lib/time';
+import { isOverdue } from '@/lib/utang';
 import { useDebounced } from '@/lib/useDebounced';
 import { CustomerFormDialog } from './CustomerDialogs';
 import { LimitBar } from './LimitBar';
@@ -21,6 +23,7 @@ export function CustomersPage() {
 
   const owing = customers.data?.filter((c) => c.balance > 0) ?? [];
   const totalOwed = owing.reduce((s, c) => s + c.balance, 0);
+  const overdue = owing.filter(isOverdue).length;
 
   return (
     <div className="grid gap-6">
@@ -85,6 +88,9 @@ export function CustomersPage() {
               <p className="text-[15px] text-muted-foreground">
                 owed by {owing.length} {plural('customer', owing.length)}
               </p>
+              {overdue > 0 && (
+                <p className="text-[15px] font-semibold text-destructive">{overdue} overdue</p>
+              )}
             </section>
           )}
           <ul className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm">
@@ -102,7 +108,23 @@ export function CustomersPage() {
                           Blocked
                         </span>
                       )}
+                      {isOverdue(c) && (
+                        <span className="rounded-full bg-destructive px-2 py-0.5 text-xs font-bold text-white">
+                          Overdue
+                        </span>
+                      )}
                     </span>
+                    {c.dueDate && c.balance > 0 && (
+                      <span
+                        className={
+                          isOverdue(c)
+                            ? 'block text-sm font-medium text-destructive'
+                            : 'block text-sm text-muted-foreground'
+                        }
+                      >
+                        {isOverdue(c) ? 'Was due' : 'Pay by'} {formatDate(c.dueDate)}
+                      </span>
+                    )}
                     {c.phone && (
                       <span className="block font-mono text-sm text-muted-foreground">
                         {c.phone}

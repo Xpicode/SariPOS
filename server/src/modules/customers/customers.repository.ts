@@ -1,6 +1,6 @@
 import type { Db } from '../../db/pool';
 
-export type LedgerType = 'CHARGE' | 'PAYMENT' | 'ADJUSTMENT';
+export type LedgerType = 'CHARGE' | 'PAYMENT' | 'ADJUSTMENT' | 'INTEREST';
 
 export type CustomerView = {
   id: number;
@@ -10,6 +10,10 @@ export type CustomerView = {
   creditLimit: number;
   isBlocked: boolean;
   balance: number; // what they owe now (negative = the store owes them)
+  dueDate: string | null; // "2026-10-15", the day they promised to pay
+  interestBp: number; // interest if late: 500 = 5.00% of what they owe
+  pastDue: boolean; // the due date is before today (store time)
+  interestCharged: boolean; // interest for the current due date is already on the ledger
   createdAt: Date;
 };
 
@@ -19,7 +23,11 @@ const CUSTOMER_SELECT = `
   SELECT c.id, c.name, c.phone, c.address, c.credit_limit AS "creditLimit",
          c.is_blocked AS "isBlocked", c.created_at AS "createdAt",
          COALESCE((SELECT SUM(l.amount) FROM credit_ledger l WHERE l.customer_id = c.id), 0)::bigint
-           AS balance
+           AS balance,
+         to_char(c.due_date, 'YYYY-MM-DD') AS "dueDate", c.interest_bp AS "interestBp",
+         COALESCE(c.due_date < (now() AT TIME ZONE 'Asia/Manila')::date, FALSE) AS "pastDue",
+         EXISTS (SELECT 1 FROM credit_ledger i
+                 WHERE i.customer_id = c.id AND i.interest_for = c.due_date) AS "interestCharged"
   FROM customers c`;
 
 const escapeLike = (s: string) => s.replace(/[\\%_]/g, (ch) => `\\${ch}`);
@@ -49,12 +57,26 @@ export async function lockCustomer(db: Db, id: number) {
 
 export async function insertCustomer(
   db: Db,
-  c: { name: string; phone?: string; address?: string; creditLimit?: number },
+  c: {
+    name: string;
+    phone?: string;
+    address?: string;
+    creditLimit?: number;
+    dueDate?: string;
+    interestBp?: number;
+  },
 ) {
   const { rows } = await db.query<{ id: number }>(
-    `INSERT INTO customers (name, phone, address, credit_limit)
-     VALUES ($1, $2, $3, COALESCE($4, 50000)) RETURNING id`, // default limit ₱500
-    [c.name, c.phone ?? null, c.address || null, c.creditLimit ?? null],
+    `INSERT INTO customers (name, phone, address, credit_limit, due_date, interest_bp)
+     VALUES ($1, $2, $3, COALESCE($4, 50000), $5, COALESCE($6, 0)) RETURNING id`, // default limit ₱500
+    [
+      c.name,
+      c.phone ?? null,
+      c.address || null,
+      c.creditLimit ?? null,
+      c.dueDate ?? null,
+      c.interestBp ?? null,
+    ],
   );
   return rows[0].id;
 }
@@ -69,6 +91,8 @@ export async function updateCustomer(
     address?: string | null;
     creditLimit?: number;
     isBlocked?: boolean;
+    dueDate?: string | null;
+    interestBp?: number;
   },
 ) {
   await db.query(
@@ -77,7 +101,9 @@ export async function updateCustomer(
        phone        = CASE WHEN $3 THEN $4 ELSE phone END,
        address      = CASE WHEN $5 THEN $6 ELSE address END,
        credit_limit = COALESCE($7, credit_limit),
-       is_blocked   = COALESCE($8, is_blocked)
+       is_blocked   = COALESCE($8, is_blocked),
+       due_date     = CASE WHEN $9 THEN $10::date ELSE due_date END,
+       interest_bp  = COALESCE($11, interest_bp)
      WHERE id = $1`,
     [
       id,
@@ -88,6 +114,9 @@ export async function updateCustomer(
       c.address || null,
       c.creditLimit ?? null,
       c.isBlocked ?? null,
+      c.dueDate !== undefined,
+      c.dueDate ?? null,
+      c.interestBp ?? null,
     ],
   );
 }
@@ -102,13 +131,14 @@ export async function insertLedger(
     sessionId?: number;
     idempotencyKey?: string;
     note?: string;
+    interestFor?: string; // INTEREST rows only: the due date it's charged for
     createdBy: number;
   },
 ) {
   const { rows } = await db.query<{ id: number }>(
-    `INSERT INTO credit_ledger
-       (customer_id, type, amount, sale_id, cash_session_id, idempotency_key, note, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+    `INSERT INTO credit_ledger (customer_id, type, amount, sale_id, cash_session_id,
+       idempotency_key, note, created_by, interest_for)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
     [
       e.customerId,
       e.type,
@@ -118,6 +148,7 @@ export async function insertLedger(
       e.idempotencyKey ?? null,
       e.note ?? null,
       e.createdBy,
+      e.interestFor ?? null,
     ],
   );
   return rows[0].id;
