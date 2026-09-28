@@ -1,0 +1,30 @@
+# Render Blueprint for the API (https://render.com/docs/blueprint-spec).
+# Render → New → Blueprint → pick this repo. It asks for the values marked sync: false.
+services:
+  - type: web
+    name: saripos-api
+    runtime: node
+    region: singapore # closest Render region to the Philippines
+    plan: free
+    rootDir: server
+    # --include=dev: TypeScript and node-pg-migrate are dev tools, but the build and the
+    # migrations need them (NODE_ENV=production would otherwise skip them).
+    buildCommand: npm ci --include=dev && npm run build
+    # Pending migrations run before each start, so the database always matches the code.
+    startCommand: npm run migrate:up && npm start
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_ENV
+        value: production # secure cookies, no stack traces
+      - key: NODE_VERSION
+        value: "24"
+      - key: TRUST_PROXY
+        value: "2" # visitor → Vercel → Render's proxy → API (see server/src/app.ts)
+      - key: DEMO_MODE
+        value: "true"
+      - key: JWT_ACCESS_SECRET
+        generateValue: true # Render makes a random secret; nobody ever sees or types it
+      - key: DATABASE_URL
+        sync: false # Neon connection string (secret)
+      - key: CLIENT_ORIGIN
+        sync: false # the Vercel URL, e.g. https://saripos.vercel.app

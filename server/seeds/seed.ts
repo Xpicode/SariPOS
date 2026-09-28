@@ -1,9 +1,21 @@
 // Dev seed: wipes all data and loads a sample sari-sari store.
-// Run: npm run seed   (needs SEED_* vars in .env)
+// Run: npm run seed        (needs SEED_* vars in .env)
+//      npm run seed:demo   (public demo: owner_demo / cashier_demo + 30 days of history)
 import argon2 from 'argon2';
 import { env } from '../src/config/env';
 import { pool } from '../src/db/pool';
 import { withTransaction } from '../src/db/transaction';
+import { todayInManila } from '../src/utils/time';
+import { seedHistory } from './demo-history';
+
+const DEMO = process.argv.includes('--demo');
+const DEMO_DAYS = 30;
+const OWNER_USERNAME = DEMO ? 'owner_demo' : 'owner';
+const CASHIER_USERNAME = DEMO ? 'cashier_demo' : 'cashier';
+const OWNER_NAME = DEMO ? 'Rosa Dela Cruz' : 'Store Owner';
+const CASHIER_NAME = DEMO ? 'Mark Santos' : 'Bantay';
+// Demo: a couple of items end up below their reorder level, so the low-stock alert shows.
+const DEMO_LOW_STOCK: Record<string, number> = { 'Safeguard Pure White 60g': 2, 'Winston Red': 30 };
 
 if (env.NODE_ENV === 'production') throw new Error('Refusing to seed a production database');
 
@@ -291,6 +303,11 @@ async function seed() {
     argon2.hash(SEED_CASHIER_PASSWORD!),
     argon2.hash(SEED_OWNER_PIN!),
   ]);
+  // Demo: the store "opened" DEMO_DAYS ago, so the opening stock and wallet floats come first.
+  const today = todayInManila();
+  const openedAt = DEMO
+    ? new Date(Date.parse(`${today}T05:00:00+08:00`) - (DEMO_DAYS + 1) * 86_400_000)
+    : new Date();
 
   await withTransaction(async (db) => {
     await db.query(`TRUNCATE users, refresh_tokens, categories, products, product_units, price_history,
@@ -301,13 +318,15 @@ async function seed() {
       rows: [owner],
     } = await db.query(
       `INSERT INTO users (username, full_name, password_hash, pin_hash, role)
-       VALUES ('owner', 'Store Owner', $1, $2, 'OWNER') RETURNING id`,
-      [ownerHash, pinHash],
+       VALUES ($3, $4, $1, $2, 'OWNER') RETURNING id`,
+      [ownerHash, pinHash, OWNER_USERNAME, OWNER_NAME],
     );
-    await db.query(
+    const {
+      rows: [cashier],
+    } = await db.query(
       `INSERT INTO users (username, full_name, password_hash, role)
-       VALUES ('cashier', 'Bantay', $1, 'CASHIER')`,
-      [cashierHash],
+       VALUES ($2, $3, $1, 'CASHIER') RETURNING id`,
+      [cashierHash, CASHIER_USERNAME, CASHIER_NAME],
     );
 
     const catIds = new Map<string, number>();
@@ -318,13 +337,15 @@ async function seed() {
       catIds.set(name, rows[0].id);
     }
 
+    const openings: { productId: number; stock: number; unitCost: number }[] = [];
     for (const p of PRODUCTS) {
+      const stock = DEMO ? (DEMO_LOW_STOCK[p.name] ?? p.stock) : p.stock;
       const {
         rows: [prod],
       } = await db.query(
         `INSERT INTO products (name, category_id, base_unit, stock_qty, reorder_level)
          VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-        [p.name, catIds.get(p.cat), p.base ?? 'pc', p.stock, p.reorder ?? 5],
+        [p.name, catIds.get(p.cat), p.base ?? 'pc', stock, p.reorder ?? 5],
       );
       for (const [i, [unit, factor, cost, price]] of p.units.entries()) {
         await db.query(
@@ -333,13 +354,8 @@ async function seed() {
           [prod.id, unit, factor, c(cost), c(price), i === 0],
         );
       }
-      // Every stock change is a ledger row, including the opening stock.
       const [, factor, cost] = p.units[0];
-      await db.query(
-        `INSERT INTO stock_movements (product_id, type, qty_change, unit_cost, note, created_by)
-         VALUES ($1, 'STOCK_IN', $2, $3, 'Opening stock (seed)', $4)`,
-        [prod.id, p.stock, Math.round(c(cost) / factor), owner.id],
-      );
+      openings.push({ productId: prod.id, stock, unitCost: Math.round(c(cost) / factor) });
     }
 
     // Wallets start empty; the opening float is a TOP_UP row (from outside the drawer), so the
@@ -350,21 +366,20 @@ async function seed() {
     );
     await db.query(
       `INSERT INTO ewallet_transactions
-         (idempotency_key, account_id, type, amount, wallet_change, cash_change, created_by)
-       VALUES (gen_random_uuid(), 1, 'TOP_UP', $1, $1, 0, $3),
-              (gen_random_uuid(), 2, 'TOP_UP', $2, $2, 0, $3)`,
-      [c(5000), c(2000), owner.id],
+         (idempotency_key, account_id, type, amount, wallet_change, cash_change, created_by, created_at)
+       VALUES (gen_random_uuid(), 1, 'TOP_UP', $1, $1, 0, $3, $4),
+              (gen_random_uuid(), 2, 'TOP_UP', $2, $2, 0, $3, $4)`,
+      [c(5000), c(2000), owner.id, openedAt],
     );
-    await db.query('UPDATE ewallet_accounts SET balance = $1 WHERE id = 1', [c(5000)]);
-    await db.query('UPDATE ewallet_accounts SET balance = $1 WHERE id = 2', [c(2000)]);
+    let wallets = { gcash: c(5000), load: c(2000) };
 
     // Utang customers (no debt yet: every CHARGE must come from a real sale).
     await db.query(
-      `INSERT INTO customers (name, phone, address, credit_limit, is_blocked) VALUES
-       ('Aling Nena', '09171234567', 'Purok 2, tabi ng simbahan', $1, FALSE),
-       ('Mang Tonyo', '09281234567', NULL, $2, FALSE),
-       ('Kuya Jun', NULL, NULL, $3, TRUE)`,
-      [c(500), c(1000), c(300)],
+      `INSERT INTO customers (name, phone, address, credit_limit, is_blocked, created_at) VALUES
+       ('Aling Nena', '09171234567', 'Purok 2, tabi ng simbahan', $1, FALSE, $4),
+       ('Mang Tonyo', '09281234567', NULL, $2, FALSE, $4),
+       ('Kuya Jun', NULL, NULL, $3, TRUE, $4)`,
+      [c(500), c(1000), c(300), openedAt],
     );
 
     // GCash: ₱10 per ₱500 bracket, up to ₱10,000 (1–500 = ₱10, 500.01–1000 = ₱20, ...)
@@ -377,10 +392,38 @@ async function seed() {
         );
       }
     }
+
+    let sold = new Map<number, number>();
+    if (DEMO) {
+      const ids = { ownerId: owner.id, cashierId: cashier.id, gcashId: 1, loadId: 2 };
+      const history = await seedHistory(db, ids, DEMO_DAYS, today, wallets);
+      sold = history.sold;
+      wallets = { gcash: history.gcash, load: history.load };
+      // Today's shift is already open, so a visitor can make a sale right away.
+      await db.query('INSERT INTO cash_sessions (opened_by, opening_cash) VALUES ($1, $2)', [
+        cashier.id,
+        c(1000),
+      ]);
+    }
+
+    // Every stock change is a ledger row, including the opening stock. In the demo it also covers
+    // what the history sold, so today's stock is exactly the numbers in PRODUCTS above.
+    for (const o of openings) {
+      await db.query(
+        `INSERT INTO stock_movements (product_id, type, qty_change, unit_cost, note, created_by, created_at)
+         VALUES ($1, 'STOCK_IN', $2, $3, 'Opening stock (seed)', $4, $5)`,
+        [o.productId, o.stock + (sold.get(o.productId) ?? 0), o.unitCost, owner.id, openedAt],
+      );
+    }
+    await db.query('UPDATE ewallet_accounts SET balance = $1 WHERE id = 1', [wallets.gcash]);
+    await db.query('UPDATE ewallet_accounts SET balance = $1 WHERE id = 2', [wallets.load]);
   });
 
   console.log(
-    `Seeded: 2 users, ${CATEGORIES.length} categories, ${PRODUCTS.length} products, 3 customers, 2 wallets, 40 fee rules`,
+    `Seeded: 2 users, ${CATEGORIES.length} categories, ${PRODUCTS.length} products, 3 customers, 2 wallets, 40 fee rules` +
+      (DEMO
+        ? `, ${DEMO_DAYS} days of demo history (users ${OWNER_USERNAME} / ${CASHIER_USERNAME})`
+        : ''),
   );
 }
 

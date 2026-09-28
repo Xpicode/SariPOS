@@ -19,6 +19,16 @@ const schema = z.object({
 });
 type FormValues = z.infer<typeof schema>;
 
+// Public demo build only (set at build time, see README): one-tap logins for visitors. These
+// passwords are public on purpose: the demo holds fake data and resets every night.
+const DEMO = import.meta.env.VITE_DEMO_OWNER_PASSWORD
+  ? {
+      owner: import.meta.env.VITE_DEMO_OWNER_PASSWORD as string,
+      cashier: import.meta.env.VITE_DEMO_CASHIER_PASSWORD as string,
+      pin: import.meta.env.VITE_DEMO_PIN as string,
+    }
+  : null;
+
 // Only same-app paths like "/users". Blocks "//evil.com" (an open redirect after login).
 const safeRedirect = (from: unknown) =>
   typeof from === 'string' && from.startsWith('/') && !from.startsWith('//') ? from : '/';
@@ -34,6 +44,7 @@ export function LoginPage() {
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({ resolver: zodResolver(schema) });
 
@@ -49,6 +60,13 @@ export function LoginPage() {
       setServerError(err instanceof ApiError ? err.message : 'Something went wrong. Try again.');
     }
   });
+
+  // Fills the form (so the visitor sees what's being used) and logs in.
+  const tryDemo = (username: string, password: string) => {
+    setValue('username', username);
+    setValue('password', password);
+    void onSubmit();
+  };
 
   return (
     <main className="grid min-h-dvh place-items-center px-4 py-10">
@@ -138,6 +156,45 @@ export function LoginPage() {
               {isSubmitting ? 'Logging in…' : 'Log in'}
             </Button>
           </form>
+
+          {DEMO && (
+            <>
+              <div className="border-t border-dashed border-border" />
+              <section aria-labelledby="demo-heading" className="grid gap-3 px-6 py-5">
+                <h2
+                  id="demo-heading"
+                  className="font-mono text-[11px] tracking-[0.14em] text-muted-foreground uppercase"
+                >
+                  Try the demo
+                </h2>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    disabled={isSubmitting}
+                    onClick={() => tryDemo('owner_demo', DEMO.owner)}
+                  >
+                    As owner
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    disabled={isSubmitting}
+                    onClick={() => tryDemo('cashier_demo', DEMO.cashier)}
+                  >
+                    As cashier
+                  </Button>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Sample store with 30 days of sales. Owner PIN for voids:{' '}
+                  <span className="font-mono font-medium text-foreground">{DEMO.pin}</span>. Resets
+                  every night.
+                </p>
+              </section>
+            </>
+          )}
 
           <div className="border-t border-dashed border-border" />
           <p className="px-6 pt-4 pb-6 text-center font-mono text-[11px] leading-relaxed tracking-wide text-balance text-muted-foreground uppercase">

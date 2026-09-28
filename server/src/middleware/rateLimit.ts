@@ -34,6 +34,16 @@ export const loginIpLimiter = rateLimit({
   message: tooMany('Too many login attempts from this device. Try again later.'),
 });
 
+// Everything else: 300 requests a minute per IP (5 a second, far above a busy counter).
+// Slows down anyone scripting the API: scraping every sale, or hammering it to slow the store.
+export const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 300,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: tooMany('Too many requests. Wait a minute and try again.'),
+});
+
 // Owner PIN: a 4-digit PIN has only 10,000 combinations, so guesses must be scarce.
 // Keyed by the logged-in user (use after `auth`).
 export const pinLimiter = rateLimit({

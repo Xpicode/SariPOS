@@ -1,0 +1,40 @@
+# Wipes the PUBLIC DEMO database and loads a fresh sample store (30 days of history), every
+# night at 00:00 Philippine time. Visitors can make sales, voids and utang all day; tomorrow
+# it's clean again. Can also be run by hand: Actions → Reset demo → Run workflow.
+name: Reset demo
+on:
+  schedule:
+    - cron: '0 16 * * *' # 16:00 UTC = 00:00 Asia/Manila
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reset:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    env:
+      DATABASE_URL: ${{ secrets.DEMO_DATABASE_URL }} # the only real secret here
+      # The demo logins are public on purpose (shown on the login page); keep them in repo
+      # Variables so the Vercel build and this reset always use the same values.
+      SEED_OWNER_PASSWORD: ${{ vars.DEMO_OWNER_PASSWORD }}
+      SEED_CASHIER_PASSWORD: ${{ vars.DEMO_CASHIER_PASSWORD }}
+      SEED_OWNER_PIN: ${{ vars.DEMO_PIN }}
+      CLIENT_ORIGIN: https://example.invalid # required by the config check, unused by the seed
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - name: Migrate and reseed
+        run: |
+          # The seed never signs tokens, but the config check wants a secret: a random one.
+          export JWT_ACCESS_SECRET="$(openssl rand -base64 48)"
+          npm run migrate:up
+          npm run seed:demo

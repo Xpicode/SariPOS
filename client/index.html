@@ -8,7 +8,7 @@
     <script>
       // Pick light/dark BEFORE the first paint, so dark-mode users never see a white flash.
       // A choice saved by the toggle (src/components/ThemeToggle.tsx) wins; otherwise follow
-      // the device, live. Inline on purpose: a CSP added in Phase 10 must allow its hash.
+      // the device, live. Inline on purpose; the build's CSP (vite.config.ts) allows it by hash.
       (function () {
         var media = matchMedia('(prefers-color-scheme: dark)');
         function apply() {

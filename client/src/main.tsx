@@ -1,3 +1,4 @@
+import '@/lib/zodConfig'; // first: before any validation schema is used
 import '@fontsource-variable/open-sans';
 import '@fontsource-variable/geist-mono';
 import './index.css';

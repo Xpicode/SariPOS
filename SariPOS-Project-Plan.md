@@ -660,16 +660,16 @@ Base URL: `/api/v1`  ·  🔓 public  ·  🔐 any logged-in user  ·  👑 OWNE
 
 ### 8.2 OWASP Top 10 checklist
 
-- [ ] **A01 Broken Access Control:** RBAC middleware on every route; server-side ownership checks; deny by default.
-- [ ] **A02 Cryptographic Failures:** HTTPS in production; argon2id for passwords/PINs; refresh tokens stored **hashed**; secrets only in env.
-- [ ] **A03 Injection:** 100% parameterized SQL; Zod validates all input; no string-concatenated SQL.
-- [ ] **A04 Insecure Design:** Ledgers (stock, credit), voids instead of deletes, DB `CHECK` constraints.
-- [ ] **A05 Security Misconfiguration:** `helmet()`, strict CORS origin, `x-powered-by` disabled, no default passwords, prod error handler hides stack traces.
-- [ ] **A06 Vulnerable Components:** `npm audit` on every phase; enable GitHub Dependabot.
-- [ ] **A07 Auth Failures:** Rate-limit login (5 per 15 min per IP+username); lock account after 5 failed attempts; short-lived access token (15 min); refresh token rotation.
-- [ ] **A08 Data Integrity:** Idempotency keys; DB transactions; price/cost snapshots on sale items.
-- [ ] **A09 Logging & Monitoring:** `audit_logs` for voids, price changes, stock adjustments, failed logins, user changes. Never log passwords or tokens.
-- [ ] **A10 SSRF:** No user-supplied URLs are fetched by the server (keep it that way).
+- [x] **A01 Broken Access Control:** RBAC middleware on every route; server-side ownership checks; deny by default.
+- [x] **A02 Cryptographic Failures:** HTTPS in production; argon2id for passwords/PINs; refresh tokens stored **hashed**; secrets only in env. *(HTTPS + `secure` cookie are switched on at deploy, Phase 10.)*
+- [x] **A03 Injection:** 100% parameterized SQL; Zod validates all input; no string-concatenated SQL.
+- [x] **A04 Insecure Design:** Ledgers (stock, credit), voids instead of deletes, DB `CHECK` constraints.
+- [x] **A05 Security Misconfiguration:** `helmet()`, strict CORS origin, `x-powered-by` disabled, no default passwords, prod error handler hides stack traces.
+- [x] **A06 Vulnerable Components:** `npm audit` on every phase; enable GitHub Dependabot.
+- [x] **A07 Auth Failures:** Rate-limit login (5 per 15 min per IP+username); lock account after 5 failed attempts; short-lived access token (15 min); refresh token rotation.
+- [x] **A08 Data Integrity:** Idempotency keys; DB transactions; price/cost snapshots on sale items.
+- [x] **A09 Logging & Monitoring:** `audit_logs` for voids, price changes, stock adjustments, failed logins, user changes. Never log passwords or tokens.
+- [x] **A10 SSRF:** No user-supplied URLs are fetched by the server (keep it that way).
 
 ### 8.3 Auth design
 
@@ -1246,14 +1246,14 @@ GROUP BY hour ORDER BY hour;
 **Goal:** Prove the system is safe and correct.
 
 **Tasks — Security**
-- [ ] Go through the Section 8.2 OWASP checklist item by item
-- [ ] `helmet()` with a Content-Security-Policy
-- [ ] CORS: only `CLIENT_ORIGIN`
-- [ ] `app.disable('x-powered-by')`, JSON body size limit (`express.json({ limit: '100kb' })`)
-- [ ] Rate limit: login, PIN verify, and a general API limit
-- [ ] Grep the codebase for string-concatenated SQL: must be **zero**
-- [ ] `npm audit` → fix highs/criticals; enable Dependabot
-- [ ] Try attacking your own app (next table)
+- [x] Go through the Section 8.2 OWASP checklist item by item
+- [x] `helmet()` with a Content-Security-Policy *(API: `default-src 'none'`; web app: strict CSP `<meta>` added to the production build by `client/vite.config.ts`, inline theme script allowed by hash)*
+- [x] CORS: only `CLIENT_ORIGIN`
+- [x] `app.disable('x-powered-by')`, JSON body size limit (`express.json({ limit: '100kb' })`)
+- [x] Rate limit: login, PIN verify, and a general API limit *(300/min per IP; plus `Cache-Control: no-store` on every API response)*
+- [x] Grep the codebase for string-concatenated SQL: must be **zero** *(every `${}` in SQL is a constant column list / lock clause; user input only ever goes in `$n` parameters)*
+- [x] `npm audit` → fix highs/criticals; enable Dependabot *(0 vulnerabilities in server and client; `.github/dependabot.yml`)*
+- [x] Try attacking your own app (next table) *(API rows: `server/src/tests/security.test.ts`; XSS rendering + token storage checked in a real browser against the production build)*
 
 **Self-pentest checklist**
 
@@ -1269,14 +1269,14 @@ GROUP BY hour ORDER BY hour;
 | Double submit | Replay the same sale request | One sale only |
 
 **Tasks — Testing**
-- [ ] Unit tests: `computeFee`, tingi conversion, expected-cash formula, money helpers
-- [ ] Integration tests (Supertest + test DB): login, checkout, insufficient stock, void, utang limit, cash-out
-- [ ] Target: all business-critical paths covered
+- [x] Unit tests: `computeFee`, tingi conversion, expected-cash formula, money helpers *(tingi is covered end to end: selling 2 packs takes 40 sticks)*
+- [x] Integration tests (Supertest + test DB): login, checkout, insufficient stock, void, utang limit, cash-out *(real HTTP with built-in `fetch` instead of Supertest; separate `saripos_test` DB)*
+- [x] Target: all business-critical paths covered
 
 **Done when**
-- [ ] All self-pentest rows pass
-- [ ] `npm test` is green
-- [ ] `npm audit` shows no high/critical issues
+- [x] All self-pentest rows pass
+- [x] `npm test` is green
+- [x] `npm audit` shows no high/critical issues
 
 ---
 
@@ -1285,17 +1285,17 @@ GROUP BY hour ORDER BY hour;
 **Goal:** A live demo link + a README that impresses recruiters.
 
 **Tasks**
-- [ ] DB on Neon/Supabase; run migrations + demo seed
-- [ ] Backend on Render/Railway (env vars set there, `NODE_ENV=production`)
-- [ ] Frontend on Vercel/Netlify (`VITE_API_URL`)
-- [ ] HTTPS everywhere; cookie `secure: true`; `app.set('trust proxy', 1)` behind the host's proxy
-- [ ] Demo accounts: `owner_demo` / `cashier_demo` (demo data only, reset daily if possible)
-- [ ] README: screenshots/GIF, features, tech stack, ERD image, security features, how to run locally
+- [ ] DB on Neon/Supabase; run migrations + demo seed *(ready: `npm run seed:demo` + the "Reset demo" workflow; needs your Neon account, docs/DEPLOY.md step 2–3)*
+- [ ] Backend on Render/Railway (env vars set there, `NODE_ENV=production`) *(ready: `render.yaml`; step 4)*
+- [ ] Frontend on Vercel/Netlify (`VITE_API_URL`) *(ready: `client/vercel.json`, API forwarded so the cookie stays first-party; step 5)*
+- [x] HTTPS everywhere; cookie `secure: true`; `app.set('trust proxy', 1)` behind the host's proxy *(`TRUST_PROXY` env = number of proxies, 2 for Vercel → Render; HSTS + frame-ancestors headers in vercel.json)*
+- [x] Demo accounts: `owner_demo` / `cashier_demo` (demo data only, reset daily if possible) *(30 days of history, nightly GitHub Actions reset, `DEMO_MODE` locks user accounts, one-tap demo login)*
+- [x] README: screenshots/GIF, features, tech stack, ERD image, security features, how to run locally *(ERD as a Mermaid diagram GitHub renders)*
 - [ ] Short Loom/YouTube demo video (2–3 min)
 - [ ] Add to resume: *"Built a PERN POS for sari-sari stores with tingi inventory, utang ledger, GCash/e-load reconciliation, RBAC, and OWASP-aligned security."*
 
 **Done when**
-- [ ] A stranger can open the link, log in as demo, and make a sale
+- [ ] A stranger can open the link, log in as demo, and make a sale *(rehearsed locally with the production builds: passes; confirm on the live link)*
 - [ ] README has run instructions that work on a fresh clone
 
 ---

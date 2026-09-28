@@ -19,6 +19,10 @@ const schema = z.object({
     .regex(/^\d+[smhd]$/, 'Use a duration like 15m')
     .default('15m'),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(7),
+  // How many proxies stand between the internet and this server (see app.ts). 0 = none (local).
+  TRUST_PROXY: z.coerce.number().int().min(0).max(5).default(0),
+  // Public demo: user accounts can't be changed, so no visitor can lock the others out.
+  DEMO_MODE: z.stringbool().default(false),
 });
 
 const parsed = schema.safeParse(process.env);

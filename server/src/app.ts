@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import { env } from './config/env';
 import { pool } from './db/pool';
 import { errorHandler, notFound } from './middleware/errorHandler';
+import { apiLimiter } from './middleware/rateLimit';
 import { authRouter } from './modules/auth/auth.routes';
 import { cashSessionsRouter } from './modules/cash-sessions/cash-sessions.routes';
 import { customersRouter } from './modules/customers/customers.routes';
@@ -19,10 +20,32 @@ import { usersRouter } from './modules/users/users.routes';
 export const app = express();
 
 app.disable('x-powered-by'); // don't advertise "Express" to attackers
-app.use(helmet()); // secure HTTP headers
+// Behind a host's proxy, every request comes FROM the proxy, so the rate limits would treat all
+// visitors as one person. Trusting exactly N hops makes req.ip the real visitor, and a client
+// can't fake it: an X-Forwarded-For header they send themselves sits beyond those N hops.
+// Vercel → Render = 2 hops; calling Render directly = 1. (Too high = spoofable IPs, so count.)
+app.set('trust proxy', env.TRUST_PROXY);
+app.use(
+  helmet({
+    // The API only ever returns JSON, never a page, so its CSP allows nothing at all: if a
+    // response were ever opened as a page, no script, style or frame could run from it.
+    // (The web app's own CSP is set in client/vite.config.ts.)
+    contentSecurityPolicy: {
+      useDefaults: false,
+      directives: { defaultSrc: ["'none'"], frameAncestors: ["'none'"] },
+    },
+  }),
+);
 app.use(cors({ origin: env.CLIENT_ORIGIN, credentials: true })); // only our frontend, with cookies
+app.use('/api', apiLimiter);
 app.use(express.json({ limit: '100kb' })); // reject huge bodies
 app.use(cookieParser()); // fills req.cookies (the refresh token)
+// Sales, utang balances and phone numbers must not stay in the browser's disk cache
+// (shared counter PCs) or in a proxy between the store and the server.
+app.use((_req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+});
 
 app.get('/api/v1/health', async (_req, res) => {
   await pool.query('SELECT 1');

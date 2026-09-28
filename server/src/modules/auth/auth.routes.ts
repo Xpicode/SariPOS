@@ -7,12 +7,7 @@ import { loginSchema, verifyPinSchema } from './auth.schema';
 
 export const authRouter = Router();
 
-// Responses here contain tokens: browsers and proxies must never cache them.
-authRouter.use((_req, res, next) => {
-  res.set('Cache-Control', 'no-store');
-  next();
-});
-
+// (Token responses are never cached: app.ts sets Cache-Control: no-store on every response.)
 authRouter.post('/login', loginIpLimiter, loginLimiter, validate(loginSchema), c.login);
 authRouter.post('/refresh', c.refresh); // authenticated by the httpOnly cookie
 authRouter.post('/logout', c.logout); // cookie-based, so logout works even after the access token expired

@@ -1,0 +1,66 @@
+# Every push and pull request: lint, type-check and run all tests, server and client.
+name: CI
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read # this workflow only reads the code
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: saripos_app
+          POSTGRES_PASSWORD: ci_only
+          POSTGRES_DB: saripos_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U saripos_app" --health-interval 5s --health-retries 10
+    env:
+      # Throwaway values for a throwaway database that lives only for this run.
+      DATABASE_URL: postgres://saripos_app:ci_only@localhost:5432/saripos
+      TEST_DATABASE_URL: postgres://saripos_app:ci_only@localhost:5432/saripos_test
+      JWT_ACCESS_SECRET: ci-only-secret-not-used-anywhere-else-0123456789
+      CLIENT_ORIGIN: http://localhost:5173
+      SEED_OWNER_PASSWORD: ci-owner-password
+      SEED_CASHIER_PASSWORD: ci-cashier-password
+      SEED_OWNER_PIN: '2468'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npx tsc --noEmit
+      - run: npm test
+      - run: npm audit --audit-level=high
+
+  client:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npx vitest run
+      - run: npm run build
+        env:
+          VITE_API_URL: /api/v1
+      - run: npm audit --audit-level=high
